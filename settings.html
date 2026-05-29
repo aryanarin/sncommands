@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<title>SN Commands — Settings</title>
+<style>
+  :root[data-theme="dark"] {
+    --bg:         #0d1117;
+    --bg2:        #161b22;
+    --bg3:        #0d2137;
+    --border:     #1f2937;
+    --border2:    #2d3748;
+    --text:       #e2e8f0;
+    --text-muted: #64748b;
+    --text-dim:   #4a5568;
+    --text-mono:  #38bdf8;
+    --accent:     #0070d2;
+    --accent-h:   #0055a5;
+    --danger:     #f87171;
+    --toast-bg:   #1e293b;
+    --toast-border: #334155;
+    --toast-text: #f1f5f9;
+  }
+  :root[data-theme="light"] {
+    --bg:         #f1f5f9;
+    --bg2:        #ffffff;
+    --bg3:        #dbeafe;
+    --border:     #e2e8f0;
+    --border2:    #cbd5e1;
+    --text:       #0f172a;
+    --text-muted: #475569;
+    --text-dim:   #94a3b8;
+    --text-mono:  #1d4ed8;
+    --accent:     #0070d2;
+    --accent-h:   #0055a5;
+    --danger:     #ef4444;
+    --toast-bg:   #1e293b;
+    --toast-border:#334155;
+    --toast-text: #f1f5f9;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px; display: flex; flex-direction: column; overflow: hidden;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  /* Header */
+  .header {
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 13px 28px; display: flex; align-items: center;
+    justify-content: space-between; flex-shrink: 0;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 32px; height: 32px; background: var(--accent); border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 900; color: #fff;
+  }
+  .header-title { font-size: 17px; font-weight: 700; }
+  .header-sub   { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .header-actions { display: flex; gap: 10px; align-items: center; }
+
+  .btn { border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700; padding: 8px 16px; transition: background 0.15s, color 0.15s; }
+  .btn-primary   { background: var(--accent); color: #fff; }
+  .btn-primary:hover   { background: var(--accent-h); }
+  .btn-secondary { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border2); }
+  .btn-secondary:hover { background: var(--border); color: var(--text); }
+  .btn-danger    { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  .btn-danger:hover    { background: var(--danger); color: #fff; }
+
+  .theme-toggle {
+    background: var(--bg); border: 1px solid var(--border2);
+    border-radius: 20px; cursor: pointer; font-size: 17px;
+    width: 40px; height: 30px; display: flex; align-items: center;
+    justify-content: center; transition: background 0.15s, border-color 0.15s;
+  }
+  .theme-toggle:hover { border-color: var(--accent); }
+
+  /* Main */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Left panel */
+  .left-panel {
+    width: 270px; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; flex-shrink: 0;
+    background: var(--bg2);
+  }
+  .search-wrap { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .search-input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 12px; color: var(--text); font-size: 12px; outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-dim); }
+
+  .cmd-list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .cmd-item {
+    padding: 11px 16px; cursor: pointer; border-bottom: 1px solid var(--border);
+    border-left: 3px solid transparent; transition: background 0.1s;
+  }
+  .cmd-item:hover { background: var(--bg); }
+  .cmd-item.active { background: var(--bg3); border-left-color: var(--accent); }
+  .cmd-item-name { font-weight: 700; color: var(--text-mono); font-family: monospace; font-size: 13px; margin-bottom: 2px; }
+  .cmd-item-hint { color: var(--text-dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty-list { padding: 28px 16px; text-align: center; color: var(--text-dim); font-size: 12px; line-height: 1.7; }
+
+  /* Right panel */
+  .right-panel {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    padding: 28px 36px; gap: 18px; background: var(--bg);
+  }
+  .right-panel.empty-state { align-items: center; justify-content: center; color: var(--text-dim); text-align: center; gap: 12px; }
+  .empty-icon { font-size: 44px; }
+  .empty-text { font-size: 13px; line-height: 1.8; }
+
+  .field-row { display: flex; gap: 16px; }
+  .field-group { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .field-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; }
+  .field-input {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 9px 12px; color: var(--text); font-size: 13px; outline: none; width: 100%;
+    transition: border-color 0.15s;
+  }
+  .field-input:focus { border-color: var(--accent); }
+  .field-input.mono { font-family: monospace; }
+  .field-input.error { border-color: var(--danger); }
+
+  .script-section { display: flex; flex-direction: column; flex: 1; gap: 6px; min-height: 0; }
+  .script-label-row { display: flex; align-items: center; justify-content: space-between; }
+
+  .script-area {
+    flex: 1; width: 100%; min-height: 0;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 14px 16px; color: var(--text); font-family: 'Courier New', monospace;
+    font-size: 12px; line-height: 1.7; outline: none; resize: none;
+    transition: border-color 0.15s;
+  }
+  .script-area:focus { border-color: var(--accent); }
+
+  .action-bar { display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-shrink: 0; }
+  .action-left  { display: flex; gap: 10px; }
+  .action-right { display: flex; gap: 10px; }
+
+  /* Fullscreen editor */
+  .fullscreen-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: var(--bg); z-index: 99999; display: none; flex-direction: column;
+  }
+  .fullscreen-overlay.visible { display: flex; }
+  .fullscreen-header {
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 12px 24px; display: flex; align-items: center;
+    justify-content: space-between; flex-shrink: 0;
+  }
+  .fullscreen-header-left { display: flex; align-items: center; gap: 12px; }
+  .fullscreen-title { font-size: 14px; font-weight: 700; color: var(--text-mono); font-family: monospace; }
+  .fullscreen-subtitle { font-size: 11px; color: var(--text-dim); }
+  .fullscreen-close-btn {
+    background: transparent; border: 1px solid var(--border2);
+    color: var(--text-muted); cursor: pointer; font-size: 18px; font-weight: 300;
+    width: 32px; height: 32px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, color 0.15s;
+    line-height: 1;
+  }
+  .fullscreen-close-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .fullscreen-textarea {
+    flex: 1; width: 100%; background: var(--bg); border: none; outline: none;
+    padding: 24px 36px; color: var(--text); font-family: 'Courier New', monospace;
+    font-size: 14px; line-height: 1.8; resize: none;
+  }
+  .fullscreen-footer {
+    background: var(--bg2); border-top: 1px solid var(--border);
+    padding: 10px 24px; display: flex; gap: 10px; justify-content: flex-end;
+    align-items: center;
+  }
+  .fullscreen-footer-hint { flex: 1; font-size: 11px; color: var(--text-dim); }
+
+  /* Toast — always dark so it's visible on both themes */
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--toast-bg); color: var(--toast-text);
+    padding: 9px 20px; border-radius: 8px;
+    font-size: 12px; font-weight: 600;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+    border: 1px solid var(--toast-border);
+    opacity: 0; transition: opacity 0.25s; pointer-events: none; white-space: nowrap; z-index: 999999;
+  }
+  .toast.show { opacity: 1; }
+
+  /* Checkbox */
+  .cmd-item { display: flex; align-items: flex-start; gap: 0; }
+  .cmd-item-check {
+    display: flex; align-items: center; justify-content: center;
+    padding: 11px 0 11px 14px; flex-shrink: 0;
+    opacity: 0; transition: opacity 0.15s; cursor: pointer;
+  }
+  .cmd-item:hover .cmd-item-check,
+  .cmd-item-check.checked { opacity: 1; }
+  .cmd-item-check input[type="checkbox"] {
+    width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer;
+  }
+  .cmd-item-body { flex: 1; padding: 11px 16px; cursor: pointer; min-width: 0; }
+
+  /* Bulk action bar */
+  .bulk-bar {
+    display: none; align-items: center; gap: 10px;
+    padding: 8px 14px; background: var(--bg3);
+    border-bottom: 1px solid var(--accent);
+    font-size: 12px; flex-shrink: 0;
+  }
+  .bulk-bar.visible { display: flex; }
+  .bulk-bar-count { flex: 1; color: var(--text-muted); font-weight: 600; }
+  .btn-sm { padding: 5px 11px; font-size: 11px; }
+
+
+  .statusbar {
+    padding: 6px 28px; background: var(--bg2); border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--text-dim); display: flex; justify-content: space-between; flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">\</div>
+    <div>
+      <div class="header-title">SN Commands</div>
+      <div class="header-sub">Backslash commands for ServiceNow</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="theme-toggle" id="btnTheme" title="Toggle light/dark theme">☀️</button>
+    <button class="btn btn-secondary" id="btnImport">⬆ Import</button>
+    <button class="btn btn-secondary" id="btnExport">⬇ Export</button>
+    <button class="btn btn-danger"    id="btnClearAll">🗑 Clear All</button>
+    <button class="btn btn-primary"   id="btnNew">+ New Command</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="left-panel">
+    <div class="search-wrap">
+      <input class="search-input" id="searchInput" placeholder="Search commands..." />
+    </div>
+    <!-- Bulk action bar -->
+    <div class="bulk-bar" id="bulkBar">
+      <span class="bulk-bar-count" id="bulkCount">0 selected</span>
+      <button class="btn btn-secondary btn-sm" id="btnSelectAll">Select All</button>
+      <button class="btn btn-danger    btn-sm" id="btnDeleteSelected">🗑 Delete Selected</button>
+    </div>
+    <div class="cmd-list" id="cmdList">
+      <div class="empty-list">No commands yet.<br>Click <strong>+ New Command</strong></div>
+    </div>
+  </div>
+
+  <div class="right-panel empty-state" id="rightPanel">
+    <div class="empty-icon">⚡</div>
+    <div class="empty-text">Select a command to edit<br>or click <strong>+ New Command</strong></div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span id="cmdCount">0 commands</span>
+  <span>\ · Ctrl+Shift+Space · F2  →  open palette on ServiceNow</span>
+</div>
+
+<!-- Fullscreen script editor -->
+<div class="fullscreen-overlay" id="fullscreenOverlay">
+  <div class="fullscreen-header">
+    <div class="fullscreen-header-left">
+      <span class="fullscreen-title" id="fullscreenTitle">\command</span>
+      <span class="fullscreen-subtitle">Fullscreen Editor</span>
+    </div>
+    <button class="fullscreen-close-btn" id="btnFullscreenX" title="Close (Esc)">✕</button>
+  </div>
+  <textarea class="fullscreen-textarea" id="fullscreenTextarea" spellcheck="false"></textarea>
+  <div class="fullscreen-footer">
+    <span class="fullscreen-footer-hint">Press <kbd style="background:var(--border2);padding:1px 5px;border-radius:3px;font-size:10px;">Esc</kbd> to discard changes</span>
+    <button class="btn btn-secondary" id="btnFullscreenClose">✕ Discard &amp; Close</button>
+    <button class="btn btn-primary"   id="btnFullscreenSave">💾 Apply &amp; Close</button>
+  </div>
+</div>
+
+<input type="file" id="importFile" accept=".json" style="display:none" />
+<div class="toast" id="toast"></div>
+<script src="settings.js"></script>
+</body>
+</html>
