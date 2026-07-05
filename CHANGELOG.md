@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here.
 
+# Changelog
+
+All notable changes to this project are documented here.
+
+## [Unreleased]
+### Added
+- Firefox build (`firefox/`), Manifest V3, linted clean with `web-ext lint`
+  (0 errors). See `docs/CROSS_BROWSER.md` for what differs from the Chrome
+  manifest and why.
+### Fixed
+- Hardened the "No results for …" empty-state message in the popup and
+  settings command list — it was interpolating the raw search box value into
+  `innerHTML`, which `web-ext lint` flagged as an unsafe assignment. Now
+  inserted as plain text via `Node.append()`, so it can never be parsed as
+  HTML. Applied to both the Chrome and Firefox builds.
+
 ## [4.5.0]
 ### Added
 - ❤️ Support panel (Ko-fi for international, UPI QR + copyable ID for India,

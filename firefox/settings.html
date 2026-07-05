@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<title>SN Commands — Settings</title>
+<link rel="stylesheet" href="lib/codemirror.min.css">
+<link rel="stylesheet" href="lib/dracula.min.css">
+<style>
+  :root[data-theme="dark"] {
+    --bg:           #0d1117;
+    --bg2:          #161b22;
+    --bg3:          #0d2137;
+    --border:       #1f2937;
+    --border2:      #2d3748;
+    --text:         #e2e8f0;
+    --text-muted:   #64748b;
+    --text-dim:     #4a5568;
+    --text-mono:    #38bdf8;
+    --accent:       #0070d2;
+    --accent-h:     #0055a5;
+    --danger:       #f87171;
+    --toast-bg:     #1e293b;
+    --toast-border: #334155;
+    --toast-text:   #f1f5f9;
+  }
+  :root[data-theme="light"] {
+    --bg:           #f1f5f9;
+    --bg2:          #ffffff;
+    --bg3:          #dbeafe;
+    --border:       #e2e8f0;
+    --border2:      #cbd5e1;
+    --text:         #0f172a;
+    --text-muted:   #475569;
+    --text-dim:     #94a3b8;
+    --text-mono:    #1d4ed8;
+    --accent:       #0070d2;
+    --accent-h:     #0055a5;
+    --danger:       #ef4444;
+    --toast-bg:     #1e293b;
+    --toast-border: #334155;
+    --toast-text:   #f1f5f9;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px; display: flex; flex-direction: column; overflow: hidden;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────────────── */
+  .header {
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 13px 20px; display: flex; align-items: center;
+    justify-content: space-between; flex-shrink: 0;
+  }
+  .header-left { display: flex; align-items: center; gap: 10px; }
+  .logo {
+    width: 30px; height: 30px; background: var(--accent); border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; font-weight: 900; color: #fff; flex-shrink: 0;
+  }
+  .header-title { font-size: 16px; font-weight: 700; }
+  .header-sub   { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .sort-group { display: flex; align-items: center; gap: 4px; }
+  .sort-label { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+  .btn-sort { padding: 5px 9px; font-size: 11px; }
+  .btn-sort-icon { padding: 5px 10px; font-size: 13px; line-height: 1; }
+  .active-sort { border-color: var(--accent) !important; color: var(--accent) !important; }
+  .header-divider { width: 1px; height: 22px; background: var(--border2); margin: 0 2px; flex-shrink: 0; }
+  .btn-support {
+    background: linear-gradient(135deg, #ec4899, #8b5cf6); color: #fff;
+    border: none; box-shadow: 0 2px 10px rgba(139,92,246,0.45);
+    gap: 6px;
+  }
+  .btn-support:hover { box-shadow: 0 3px 14px rgba(139,92,246,0.65); transform: translateY(-1px); }
+  .btn-support svg { flex-shrink: 0; }
+
+  .btn {
+    border: none; border-radius: 6px; cursor: pointer;
+    font-size: 12px; font-weight: 700; padding: 7px 13px;
+    transition: background 0.15s, color 0.15s; white-space: nowrap;
+    display: inline-flex; align-items: center; text-decoration: none;
+  }
+  .btn-primary  { background: var(--accent); color: #fff; }
+  .btn-primary:hover  { background: var(--accent-h); }
+  .btn-secondary{ background: var(--bg); color: var(--text-muted); border: 1px solid var(--border2); }
+  .btn-secondary:hover{ background: var(--border); color: var(--text); }
+  .btn-danger   { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  .btn-danger:hover   { background: var(--danger); color: #fff; }
+  .btn-icon { padding: 4px 9px; font-size: 11px; }
+
+  .theme-toggle {
+    background: var(--bg); border: 1px solid var(--border2);
+    border-radius: 20px; cursor: pointer; font-size: 16px;
+    width: 36px; height: 28px; display: flex; align-items: center;
+    justify-content: center; transition: background 0.15s, border-color 0.15s;
+  }
+  .theme-toggle:hover { border-color: var(--accent); }
+
+  /* ── Main layout ─────────────────────────────────────────────────────────── */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Left panel (resizable) ──────────────────────────────────────────────── */
+  .left-panel {
+    width: 240px; min-width: 160px; max-width: 500px;
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; flex-shrink: 0;
+    background: var(--bg2); position: relative; overflow: hidden;
+  }
+  /* Resize handle */
+  .resize-handle {
+    position: absolute; top: 0; right: -3px; width: 6px; height: 100%;
+    cursor: col-resize; z-index: 10; background: transparent;
+  }
+  .resize-handle:hover, .resize-handle.dragging {
+    background: var(--accent);
+    opacity: 0.4;
+  }
+
+  .search-wrap { padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .search-input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; color: var(--text); font-size: 12px; outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-dim); }
+
+  /* ── Bulk bar ────────────────────────────────────────────────────────────── */
+  .bulk-bar {
+    display: none; flex-direction: column; gap: 5px;
+    padding: 7px 10px; background: var(--bg3);
+    border-bottom: 1px solid var(--accent); flex-shrink: 0;
+  }
+  .bulk-bar.visible { display: flex; }
+  .bulk-bar-count { font-size: 11px; color: var(--text-muted); font-weight: 700; }
+  .bulk-bar-btns  { display: flex; gap: 5px; }
+  .btn-sm {
+    padding: 4px 0; font-size: 11px; flex: 1;
+    text-align: center; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── Command list ────────────────────────────────────────────────────────── */
+  .cmd-list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .cmd-item { display: flex; align-items: flex-start; border-bottom: 1px solid var(--border); }
+  .cmd-item:hover { background: var(--bg); }
+  .cmd-item.active { background: var(--bg3); border-left: 3px solid var(--accent); }
+  .cmd-item-check {
+    display: flex; align-items: center; justify-content: center;
+    padding: 12px 0 12px 12px; flex-shrink: 0; width: 0; overflow: hidden;
+    opacity: 0; cursor: pointer;
+    pointer-events: none;
+  }
+  .cmd-item:hover .cmd-item-check,
+  .cmd-item-check.checked { opacity: 1; width: 32px; pointer-events: auto; }
+  .cmd-item-check input[type="checkbox"] { width: 13px; height: 13px; accent-color: var(--accent); cursor: pointer; }
+  .cmd-item-body { flex: 1; padding: 10px 12px; cursor: pointer; min-width: 0; }
+  .cmd-item-name { font-weight: 700; color: var(--text-mono); font-family: monospace; font-size: 13px; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cmd-item-hint { color: var(--text-dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty-list { padding: 28px 14px; text-align: center; color: var(--text-dim); font-size: 12px; line-height: 1.7; }
+
+  /* ── Right panel ─────────────────────────────────────────────────────────── */
+  .right-panel {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    padding: 24px 32px; gap: 16px; background: var(--bg);
+  }
+  .right-panel.empty-state { align-items: center; justify-content: center; color: var(--text-dim); text-align: center; gap: 12px; }
+  .empty-icon { font-size: 44px; }
+  .empty-text { font-size: 13px; line-height: 1.8; }
+
+  .field-row { display: flex; gap: 14px; flex-shrink: 0; }
+  .field-group { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .field-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; }
+  .field-input {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 11px; color: var(--text); font-size: 13px; outline: none; width: 100%;
+    transition: border-color 0.15s;
+  }
+  .field-input:focus { border-color: var(--accent); }
+  .field-input.mono { font-family: monospace; }
+  .field-input.error { border-color: var(--danger); }
+
+  /* ── Script section ──────────────────────────────────────────────────────── */
+  .script-section {
+    display: flex; flex-direction: column; flex: 1; gap: 6px;
+    min-height: 0; position: relative;
+  }
+  .script-label-row { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .script-actions { display: flex; gap: 5px; align-items: center; flex-wrap: nowrap; }
+
+  /* CodeMirror container — fills flex space */
+  .cm-container {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+  }
+  .cm-container .CodeMirror {
+    flex: 1; height: 100%;
+    font-family: 'Courier New', monospace;
+    font-size: 12.5px; line-height: 1.7;
+    border: none; border-radius: 0;
+  }
+  .cm-container:focus-within { border-color: var(--accent); }
+  .cm-container .CodeMirror.cm-s-dracula { background: var(--bg2); }
+  [data-theme="light"] .cm-container .CodeMirror { background: #fff; color: #0f172a; }
+  [data-theme="light"] .cm-container .CodeMirror-gutters { background: #f1f5f9; border-right: 1px solid #e2e8f0; }
+
+  /* Find bar — floats over the CM */
+  .find-bar {
+    display: none; position: absolute; top: 30px; right: 0;
+    flex-direction: column; gap: 5px; z-index: 50;
+    background: var(--bg2); border: 1px solid var(--accent);
+    border-radius: 6px; padding: 6px 8px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.45); min-width: 340px;
+  }
+  .find-bar.visible { display: flex; }
+  .find-bar-row {
+    display: flex; align-items: center; gap: 5px;
+  }
+  .find-bar-query, .find-bar-replace {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 4px 8px; color: var(--text);
+    font-size: 12px; outline: none; font-family: monospace;
+  }
+  .find-bar-query:focus, .find-bar-replace:focus { border-color: var(--accent); }
+  .find-bar-count { font-size: 10px; color: var(--text-dim); white-space: nowrap; min-width: 60px; text-align: right; }
+  .find-nav { display: flex; gap: 3px; }
+  .find-nav button {
+    background: var(--bg); border: 1px solid var(--border2);
+    color: var(--text-muted); cursor: pointer; border-radius: 4px;
+    padding: 3px 7px; font-size: 11px; line-height: 1;
+  }
+  .find-nav button:hover { border-color: var(--accent); color: var(--text); }
+  .find-bar-toggle {
+    display: flex; align-items: center; gap: 3px;
+    font-size: 11px; color: var(--text-muted); cursor: pointer;
+    white-space: nowrap; user-select: none;
+  }
+  .find-bar-toggle input { accent-color: var(--accent); cursor: pointer; }
+  .find-close {
+    background: transparent; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 13px; padding: 0 2px; line-height: 1;
+  }
+  .find-close:hover { color: var(--danger); }
+  .btn-replace-one, .btn-replace-all {
+    background: var(--bg); border: 1px solid var(--border2);
+    color: var(--text-muted); cursor: pointer; border-radius: 4px;
+    padding: 3px 9px; font-size: 11px; white-space: nowrap;
+  }
+  .btn-replace-one:hover, .btn-replace-all:hover { border-color: var(--accent); color: var(--text); }
+
+  /* Action bar */
+  .action-bar { display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-shrink: 0; }
+  .action-left  { display: flex; gap: 8px; }
+  .action-right { display: flex; gap: 8px; }
+
+  /* ── Fullscreen editor ───────────────────────────────────────────────────── */
+  .fullscreen-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: var(--bg); z-index: 99999; display: none; flex-direction: column;
+  }
+  .fullscreen-overlay.visible { display: flex; }
+  .fullscreen-header {
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 10px 22px; display: flex; align-items: center;
+    justify-content: space-between; flex-shrink: 0;
+  }
+  .fullscreen-header-left { display: flex; align-items: center; gap: 10px; }
+  .fullscreen-title    { font-size: 14px; font-weight: 700; color: var(--text-mono); font-family: monospace; }
+  .fullscreen-subtitle { font-size: 11px; color: var(--text-dim); }
+  .fullscreen-close-btn {
+    background: transparent; border: 1px solid var(--border2);
+    color: var(--text-muted); cursor: pointer; font-size: 17px; font-weight: 300;
+    width: 30px; height: 30px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, color 0.15s; line-height: 1;
+  }
+  .fullscreen-close-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+  /* fullscreen CM */
+  #fsCMContainer {
+    flex: 1; min-height: 0; overflow: hidden;
+  }
+  #fsCMContainer .CodeMirror {
+    height: 100%; font-family: 'Courier New', monospace;
+    font-size: 14px; line-height: 1.8; border: none; border-radius: 0;
+  }
+  [data-theme="light"] #fsCMContainer .CodeMirror { background: #fff; color: #0f172a; }
+  [data-theme="light"] #fsCMContainer .CodeMirror-gutters { background: #f1f5f9; border-right: 1px solid #e2e8f0; }
+
+  .fullscreen-footer {
+    background: var(--bg2); border-top: 1px solid var(--border);
+    padding: 9px 22px; display: flex; gap: 10px;
+    justify-content: flex-end; align-items: center; flex-shrink: 0;
+  }
+  .fullscreen-footer-hint { flex: 1; font-size: 11px; color: var(--text-dim); }
+
+    /* ── Fullscreen find bar ────────────────────────────────────────────────────── */
+  .fs-find-bar {
+    display: none; flex-direction: column; gap: 5px;
+    padding: 7px 22px; background: var(--bg2);
+    border-bottom: 1px solid var(--accent); flex-shrink: 0;
+  }
+  .fs-find-bar.visible { display: flex; }
+
+  /* ── Instances modal ─────────────────────────────────────────────────────── */
+  .instances-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.55); z-index: 100000; display: none;
+    align-items: center; justify-content: center;
+  }
+  .instances-overlay.visible { display: flex; }
+  .instances-modal {
+    width: 560px; max-width: 92vw; max-height: 84vh;
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: 10px; display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .instances-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0;
+  }
+  .instances-title { font-size: 15px; font-weight: 700; }
+  .instances-sub   { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .instances-body  { padding: 18px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+  .instances-option { display: flex; flex-direction: column; gap: 8px; }
+  .instances-toggle-row { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+  .instances-toggle-row input[type="checkbox"] { margin-top: 3px; width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+  .instances-option-title { font-size: 13px; font-weight: 700; }
+  .instances-option-desc  { font-size: 11.5px; color: var(--text-muted); line-height: 1.6; }
+  .instances-option-desc code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-family: monospace; }
+  .instances-divider { text-align: center; font-size: 11px; color: var(--text-dim); }
+  .instances-add-row { display: flex; gap: 8px; }
+  .instances-add-row .field-input { flex: 1; }
+  .instances-domain-list { display: flex; flex-direction: column; gap: 6px; }
+  .instances-empty { font-size: 11.5px; color: var(--text-dim); padding: 4px 2px; }
+  .instances-domain-item {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 10px; font-family: monospace; font-size: 12px;
+  }
+  .instances-domain-item .btn-danger { padding: 3px 9px; font-size: 11px; }
+  .instances-footer {
+    padding: 12px 20px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  }
+  #customDomainsSection.disabled { opacity: 0.45; pointer-events: none; }
+
+  /* ── Support modal ───────────────────────────────────────────────────────── */
+  .support-modal { width: 620px; }
+  .support-modal .instances-body { gap: 18px; }
+  .support-cols { display: flex; align-items: stretch; gap: 18px; }
+  .support-col { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .support-col-divider { width: 1px; background: var(--border); flex-shrink: 0; }
+  .support-cta { align-self: flex-start; margin-top: auto; }
+  .support-qr-card {
+    background: #fff; border: 1px solid var(--border2); border-radius: 14px;
+    padding: 10px; align-self: flex-start; box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  }
+  .support-qr { width: 150px; height: 150px; display: block; border-radius: 8px; }
+  .support-upi-row {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 10px;
+  }
+  .support-upi-id { font-family: monospace; font-size: 12.5px; flex: 1; word-break: break-all; }
+  .support-upi-row .btn { padding: 4px 10px; font-size: 11px; flex-shrink: 0; }
+  @media (max-width: 560px) {
+    .support-cols { flex-direction: column; }
+    .support-col-divider { display: none; }
+  }
+
+  /* ── Toast ───────────────────────────────────────────────────────────────── */
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--toast-bg); color: var(--toast-text);
+    padding: 9px 20px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.45); border: 1px solid var(--toast-border);
+    opacity: 0; transition: opacity 0.25s; pointer-events: none; white-space: nowrap; z-index: 999999;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ── Status bar ──────────────────────────────────────────────────────────── */
+  .statusbar {
+    padding: 5px 22px; background: var(--bg2); border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--text-dim); display: flex; justify-content: space-between; flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">\</div>
+    <div>
+      <div class="header-title">SN Commands</div>
+      <div class="header-sub">Backslash commands for ServiceNow</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="theme-toggle" id="btnTheme" title="Toggle light/dark theme">☀️</button>
+    <button class="btn btn-secondary" id="btnImport">⬆ Import</button>
+    <button class="btn btn-secondary" id="btnExport">⬇ Export All</button>
+    <button class="btn btn-secondary" id="btnInstances" title="Configure which ServiceNow instances (incl. on-prem) this works on">🌐 Instances</button>
+    <div class="sort-group">
+      <span class="sort-label">Sort:</span>
+      <button class="btn btn-secondary btn-sort active-sort btn-sort-icon" id="btnSortOrder" title="Sort by custom order number">⇅</button>
+      <button class="btn btn-secondary btn-sort" id="btnSortName"  title="Sort alphabetically by name">A–Z</button>
+      <button class="btn btn-secondary btn-sort" id="btnSortDate"  title="Sort by creation date">🕐 Date</button>
+    </div>
+    <span class="header-divider"></span>
+    <a class="btn btn-secondary" id="btnCommunity" href="https://sncommands.ysaryan.eu.org" target="_blank" rel="noopener noreferrer" title="Join the community">💬 Community</a>
+    <button class="btn btn-support" id="btnSupport" title="Support the project">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-6.716-4.35-9.428-8.06C.86 10.44 1.02 7.2 3.34 5.34 5.4 3.69 8.28 4.06 10 6.02L12 8.3l2-2.28c1.72-1.96 4.6-2.33 6.66-.68 2.32 1.86 2.48 5.1.77 7.6C18.716 16.65 12 21 12 21z"/></svg>
+      Support
+    </button>
+    <button class="btn btn-danger"    id="btnClearAll">🗑 Clear All</button>
+    <button class="btn btn-primary"   id="btnNew">+ New Command</button>
+  </div>
+</div>
+
+<!-- ── Main ────────────────────────────────────────────────────────────────── -->
+<div class="main" id="mainLayout">
+
+  <!-- Left panel -->
+  <div class="left-panel" id="leftPanel">
+
+    <!-- Drag-to-resize handle -->
+    <div class="resize-handle" id="resizeHandle"></div>
+
+    <!-- Search -->
+    <div class="search-wrap">
+      <input class="search-input" id="searchInput" placeholder="Search commands..." />
+    </div>
+
+    <!-- Bulk action bar -->
+    <div class="bulk-bar" id="bulkBar">
+      <span class="bulk-bar-count" id="bulkCount">0 selected</span>
+      <div class="bulk-bar-btns">
+        <button class="btn btn-secondary btn-sm" id="btnSelectAll">Deselect All</button>
+        <button class="btn btn-secondary btn-sm" id="btnExportSelected">⬇ Exp</button>
+        <button class="btn btn-danger    btn-sm" id="btnDeleteSelected">🗑 Del</button>
+      </div>
+    </div>
+
+    <!-- Command list -->
+    <div class="cmd-list" id="cmdList">
+      <div class="empty-list">No commands yet.<br>Click <strong>+ New Command</strong></div>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="right-panel empty-state" id="rightPanel">
+    <div class="empty-icon">⚡</div>
+    <div class="empty-text">Select a command to edit<br>or click <strong>+ New Command</strong></div>
+  </div>
+</div>
+
+<!-- ── Status bar ───────────────────────────────────────────────────────────── -->
+<div class="statusbar">
+  <span id="cmdCount">0 commands</span>
+  <span>\ · Ctrl+Shift+Space · F2  →  open palette on ServiceNow</span>
+</div>
+
+<!-- ── Instances modal ──────────────────────────────────────────────────────── -->
+<div class="instances-overlay" id="instancesOverlay">
+  <div class="instances-modal">
+    <div class="instances-header">
+      <div>
+        <div class="instances-title">🌐 ServiceNow Instances</div>
+        <div class="instances-sub">Choose where the \ palette and commands are allowed to run</div>
+      </div>
+      <button class="fullscreen-close-btn" id="btnInstancesX" title="Close">✕</button>
+    </div>
+
+    <div class="instances-body">
+      <div class="instances-option">
+        <label class="instances-toggle-row">
+          <input type="checkbox" id="chkAllUrls" />
+          <div>
+            <div class="instances-option-title">Enable on all websites</div>
+            <div class="instances-option-desc">Simplest option. Works on any on-prem or cloud ServiceNow instance automatically, with no need to list domains. Chrome will ask you to confirm this permission.</div>
+          </div>
+        </label>
+      </div>
+
+      <div class="instances-divider">— or, more restrictive —</div>
+
+      <div class="instances-option" id="customDomainsSection">
+        <div class="instances-option-title">Add specific instance domains</div>
+        <div class="instances-option-desc">e.g. your on-prem host, such as <code>snow.mycompany.local</code> or <code>servicenow.internal.corp</code>. Also useful for cloud instances not on service-now.com.</div>
+        <div class="instances-add-row">
+          <input class="field-input mono" id="newDomainInput" placeholder="e.g. servicenow-onprem.mycompany.com" />
+          <button class="btn btn-primary" id="btnAddDomain">+ Add</button>
+        </div>
+        <div class="instances-domain-list" id="domainList">
+          <div class="instances-empty">No custom domains added yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="instances-footer">
+      <span class="fullscreen-footer-hint">Changes apply immediately — reload any open ServiceNow tabs to pick them up.</span>
+      <button class="btn btn-secondary" id="btnInstancesDone">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Support modal ────────────────────────────────────────────────────────── -->
+<div class="instances-overlay" id="supportOverlay">
+  <div class="instances-modal support-modal">
+    <div class="instances-header">
+      <div>
+        <div class="instances-title">❤️ Support SN Commands</div>
+        <div class="instances-sub">Built and maintained solo, in spare time. If it saves you time, a coffee is always appreciated 🙂</div>
+      </div>
+      <button class="fullscreen-close-btn" id="btnSupportX" title="Close">✕</button>
+    </div>
+
+    <div class="instances-body">
+      <div class="support-cols">
+        <div class="support-col">
+          <div class="instances-option-title">☕ International</div>
+          <div class="instances-option-desc">One-off or monthly, via card / PayPal / Apple &amp; Google Pay on Ko-fi.</div>
+          <a class="btn btn-support support-cta" href="https://ko-fi.com/ysaryan" target="_blank" rel="noopener noreferrer">Support on Ko-fi ↗</a>
+        </div>
+
+        <div class="support-col-divider"></div>
+
+        <div class="support-col">
+          <div class="instances-option-title">🇮🇳 India — UPI</div>
+          <div class="instances-option-desc">Scan the QR with any UPI app, or copy the ID below.</div>
+          <div class="support-qr-card">
+            <img class="support-qr" src="icons/upi-qr.png" alt="UPI QR code for Aryan Raj" />
+          </div>
+          <div class="support-upi-row">
+            <code class="support-upi-id" id="upiIdText">ysaryanraj@okaxis</code>
+            <button class="btn btn-secondary" id="btnCopyUpi">Copy</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="instances-divider">— more —</div>
+
+      <div class="instances-option">
+        <div class="instances-option-title">⭐ Star the project</div>
+        <div class="instances-option-desc">Free, and it genuinely helps others discover the extension.</div>
+        <a class="btn btn-secondary support-cta" href="https://github.com/aryanarin/sncommands" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a>
+      </div>
+    </div>
+
+    <div class="instances-footer">
+      <span class="fullscreen-footer-hint">Thank you for using SN Commands 🙏</span>
+      <button class="btn btn-secondary" id="btnSupportDone">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Fullscreen editor ────────────────────────────────────────────────────── -->
+<div class="fullscreen-overlay" id="fullscreenOverlay">
+  <div class="fullscreen-header">
+    <div class="fullscreen-header-left">
+      <span class="fullscreen-title" id="fullscreenTitle">\command</span>
+      <span class="fullscreen-subtitle">Fullscreen Editor</span>
+    </div>
+    <button class="fullscreen-close-btn" id="btnFullscreenX" title="Close (Esc)">✕</button>
+  </div>
+  <!-- Fullscreen find & replace bar -->
+  <div class="fs-find-bar" id="fsFindBar">
+    <div class="find-bar-row">
+      <input class="find-bar-query" id="fsFindQuery" placeholder="Find…" />
+      <span class="find-bar-count" id="fsFindCount"></span>
+      <div class="find-nav">
+        <button id="fsFindPrev" title="Previous (Shift+Enter)">▲</button>
+        <button id="fsFindNext" title="Next (Enter)">▼</button>
+      </div>
+      <label class="find-bar-toggle" title="Match case">
+        <input type="checkbox" id="fsFindCase" /> Aa
+      </label>
+      <button class="find-close" id="fsFindClose" title="Close (Esc)">✕</button>
+    </div>
+    <div class="find-bar-row find-replace-row">
+      <input class="find-bar-replace" id="fsFindReplace" placeholder="Replace with…" />
+      <button class="btn-replace-one" id="fsBtnReplaceOne" title="Replace current (Enter)">Replace</button>
+      <button class="btn-replace-all" id="fsBtnReplaceAll" title="Replace all">All</button>
+    </div>
+  </div>
+  <div id="fsCMContainer"></div>
+  <div class="fullscreen-footer">
+    <span class="fullscreen-footer-hint">Press <kbd style="background:var(--border2);padding:1px 5px;border-radius:3px;font-size:10px;">Esc</kbd> to discard changes</span>
+    <button class="btn btn-secondary" id="btnFullscreenFind">🔍 Find</button>
+    <button class="btn btn-secondary" id="btnFullscreenFormat">✦ Format</button>
+    <button class="btn btn-secondary" id="btnFullscreenClose">✕ Discard &amp; Close</button>
+    <button class="btn btn-primary"   id="btnFullscreenSave">💾 Apply &amp; Close</button>
+  </div>
+</div>
+
+<input type="file" id="importFile" accept=".json" style="display:none" />
+<div class="toast" id="toast"></div>
+
+<!-- CodeMirror -->
+<script src="lib/codemirror.min.js"></script>
+<script src="lib/codemirror-javascript.min.js"></script>
+<script src="lib/matchbrackets.min.js"></script>
+<script src="lib/closebrackets.min.js"></script>
+<script src="lib/searchcursor.min.js"></script>
+<!-- js-beautify -->
+<script src="lib/beautify.min.js"></script>
+<script src="settings.js"></script>
+</body>
+</html>

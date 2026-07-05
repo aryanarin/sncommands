@@ -29,16 +29,33 @@ can be configured to run on on-prem or custom-domain instances too.
 
 ## Installation
 
-### From source (developer mode)
+This repo ships separate, ready-to-load builds for each browser — `chrome/`
+(Manifest V3, for Chrome/Edge/Brave/etc.) and `firefox/` (Manifest V3, Firefox
+128+). They share the same source; only `manifest.json` differs between them
+(background page type, permission IDs, etc. — see [docs/CROSS_BROWSER.md](docs/CROSS_BROWSER.md)).
+
+### Chrome / Edge / Brave (developer mode)
 
 1. Download or clone this repository.
-2. Open `chrome://extensions` in Chrome (or any Chromium-based browser).
+2. Open `chrome://extensions` (or `edge://extensions`, etc.).
 3. Turn on **Developer mode** (top-right).
-4. Click **Load unpacked** and select the folder you downloaded.
+4. Click **Load unpacked** and select the `chrome/` folder.
 
-### Chrome Web Store
+### Firefox (temporary install)
 
-Coming soon — this repo will be updated with the store link once it's live.
+1. Download or clone this repository.
+2. Open `about:debugging#/runtime/this-firefox`.
+3. Click **Load Temporary Add-on…** and select any file inside the `firefox/`
+   folder (e.g. `firefox/manifest.json`).
+4. Note: temporary add-ons are removed when Firefox restarts. For a
+   permanent install, package it with `web-ext build` from inside `firefox/`
+   and either self-distribute the signed `.xpi` or submit it to
+   [addons.mozilla.org](https://addons.mozilla.org).
+
+### From the stores
+
+Coming soon — this repo will be updated with store links once both listings
+are live.
 
 ## Usage
 
@@ -65,14 +82,26 @@ on-prem instance or a differently-named cloud instance:
 
 ```
 sncommands/
-├── manifest.json        # MV3 manifest
-├── background.js        # Service worker: script execution, dynamic content-script registration
-├── content.js            # Injected into ServiceNow pages: the \ command palette
-├── popup.html/.js        # Toolbar popup: quick command list + editor
-├── settings.html/.js     # Full settings page: command library, import/export, Instances, Support
-├── icons/                # Extension icons + UPI QR asset
-└── lib/                  # Bundled CodeMirror + js-beautify for the script editor
+├── chrome/                # Chrome/Edge/Brave build (Manifest V3, service worker)
+│   ├── manifest.json
+│   ├── background.js      # Service worker: script execution, dynamic content-script registration
+│   ├── content.js         # Injected into ServiceNow pages: the \ command palette
+│   ├── popup.html/.js     # Toolbar popup: quick command list + editor
+│   ├── settings.html/.js  # Full settings page: command library, import/export, Instances, Support
+│   ├── icons/             # Extension icons + UPI QR asset
+│   └── lib/               # Bundled CodeMirror + js-beautify for the script editor
+├── firefox/                # Firefox build (Manifest V3, event-page background)
+│   └── ...                # Same files as chrome/, only manifest.json differs
+└── docs/
+    ├── CROSS_BROWSER.md    # What differs between the two manifests, and why
+    └── CHROME_STORE_NOTES.md
 ```
+
+Both builds share identical `background.js` / `content.js` / `popup.*` /
+`settings.*` — only `manifest.json` differs per browser (see
+[docs/CROSS_BROWSER.md](docs/CROSS_BROWSER.md)). If you fix a bug or add a
+feature, apply it to both `chrome/` and `firefox/` (or keep one as the
+source of truth and copy across before releasing).
 
 ## Contributing
 

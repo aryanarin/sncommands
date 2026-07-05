@@ -176,9 +176,12 @@ function renderList() {
   if (filtered.length === 0) {
     const el = document.createElement('div');
     el.className = 'empty-list';
-    el.innerHTML = commands.length === 0
-      ? 'No commands yet.<br>Click <strong>+ New Command</strong>'
-      : 'No results for &ldquo;' + filter + '&rdquo;';
+    if (commands.length === 0) {
+      el.innerHTML = 'No commands yet.<br>Click <strong>+ New Command</strong>';
+    } else {
+      el.textContent = '';
+      el.append('No results for “', filter, '”');
+    }
     cmdList.appendChild(el);
     updateBulkBar();
     return;
