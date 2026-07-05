@@ -1,124 +1,100 @@
 # SN Commands
 
-A Firefox browser extension that adds a customisable backslash command palette to ServiceNow, letting you store and run JavaScript snippets on any ServiceNow tab with a single keystroke.
+A backslash (`\`) command palette for ServiceNow — save your own editable scripts
+as named commands, and run any of them instantly from anywhere on the page.
+
+Works on ServiceNow cloud instances (`*.service-now.com`) out of the box, and
+can be configured to run on on-prem or custom-domain instances too.
+
+> 📸 *Add a screenshot of the palette in action here — e.g. `docs/screenshot-palette.png` — once you have one.*
 
 ---
 
 ## Features
 
-- **Command palette** — trigger with `\`, `Ctrl+Shift+Space`, or `F2` on any ServiceNow tab
-- **Custom scripts** — store named JavaScript snippets with optional hint text
-- **Inline editor** — create, edit, and run commands directly from the extension popup
-- **Fullscreen editor** — expand the script editor for longer scripts
-- **Import / Export** — back up and restore your commands as JSON
-- **Bulk delete** — select multiple commands with checkboxes and delete in one go
-- **Clear all** — wipe all commands at once (with confirmation)
-- **Light / Dark theme** — toggle in the popup or settings page; the palette follows your theme
-- **ServiceNow & Mercedes-Benz domains** — works on `*.service-now.com` and `*.mercedes-benz.com`
-
----
+- **`\` command palette** — press the trigger anywhere on a ServiceNow page to
+  open a searchable list of your saved commands, then hit Enter (or click) to
+  run one instantly.
+- **Editable scripts** — every command is just a small piece of JavaScript you
+  write and can edit any time, with a full-screen CodeMirror editor, syntax
+  highlighting, and auto-formatting.
+- **Import / Export** — back up your command library as JSON, or share it with
+  teammates. Importing merges by name (a duplicate name *replaces* the
+  existing command) or can fully replace your library.
+- **Works globally, including on-prem** — turn on "all websites" access with
+  one toggle, or grant access to a specific list of on-prem/custom domains from
+  Settings → Instances, without needing a new extension build.
+- **Light / dark theme**, resizable panels, sort by custom order / name / date.
+- **Chrome MV3** — service-worker background script, no remote code execution.
 
 ## Installation
 
-### Manual / Developer install
-1. Download the latest `.xpi` from [Releases](../../releases).
-2. In Firefox, go to `about:addons` → click the ⚙️ gear → **Install Add-on From File…**
-3. Select the `.xpi` file.
+### From source (developer mode)
 
-### Load unpacked (for development)
-1. Clone this repo.
-2. Go to `about:debugging` → **This Firefox** → **Load Temporary Add-on…**
-3. Select any file inside the repo folder (e.g. `manifest.json`).
+1. Download or clone this repository.
+2. Open `chrome://extensions` in Chrome (or any Chromium-based browser).
+3. Turn on **Developer mode** (top-right).
+4. Click **Load unpacked** and select the folder you downloaded.
 
----
+### Chrome Web Store
+
+Coming soon — this repo will be updated with the store link once it's live.
 
 ## Usage
 
-### Opening the palette
-| Shortcut | Action |
-|---|---|
-| `\` | Open palette (when not in a text field) |
-| `Ctrl+Shift+Space` | Toggle palette open/closed |
-| `F2` | Open palette |
+1. Open the extension popup (toolbar icon) or the full settings page (⚙️) to
+   create a command: give it a name, an optional hint, and the script to run.
+2. On any supported ServiceNow page, type `\` to open the palette.
+3. Type to filter, use ↑/↓ to navigate, and press **Enter** (or click a row)
+   to run a command.
 
-### Inside the palette
-| Key | Action |
-|---|---|
-| Type | Filter commands by name or hint |
-| `↑` / `↓` | Navigate commands |
-| `Enter` | Run selected command |
-| `Esc` | Close palette |
+### Running on an on-prem or custom-domain instance
 
-### Managing commands
-Click the extension icon in the toolbar to open the **popup**, where you can:
-- Create, edit, and delete individual commands
-- Run a command directly on the active ServiceNow tab
-- Toggle light/dark theme
+By default, SN Commands only runs on `*.service-now.com`. To use it on an
+on-prem instance or a differently-named cloud instance:
 
-Click the **⚙️ Settings** icon to open the full-page settings view, which also has:
-- **Import** — load commands from a `.json` file (merge or replace)
-- **Export** — save all commands to a `.json` file
-- **Clear All** — delete every command at once
-- **Bulk select** — tick checkboxes next to commands and delete multiple at once
+1. Open the full settings page → **🌐 Instances**.
+2. Either:
+   - Turn on **Enable on all websites** (simplest — works everywhere), or
+   - Add your instance's domain under **Add specific instance domains**
+     (least-privilege — Chrome will ask you to confirm access to just that
+     domain).
+3. Reload any already-open ServiceNow tabs.
 
----
-
-## Command JSON format
-
-Commands are stored in `browser.storage.local` under the key `snCommands`. You can import/export them as JSON:
-
-```json
-{
-  "version": 1,
-  "commands": [
-    {
-      "name": "mycommand",
-      "hint": "Short description shown in the palette",
-      "script": "(function() {\n    // your ServiceNow JavaScript here\n})();"
-    }
-  ]
-}
-```
-
----
-
-## File structure
+## Project structure
 
 ```
-├── manifest.json       Extension manifest (MV2)
-├── content.js          Injected into ServiceNow tabs — renders the palette
-├── popup.html          Toolbar popup UI
-├── popup.js            Popup logic
-├── settings.html       Full-page settings UI
-├── settings.js         Settings logic
-└── icons/
-    ├── icon16.png
-    ├── icon48.png
-    └── icon128.png
+sncommands/
+├── manifest.json        # MV3 manifest
+├── background.js        # Service worker: script execution, dynamic content-script registration
+├── content.js            # Injected into ServiceNow pages: the \ command palette
+├── popup.html/.js        # Toolbar popup: quick command list + editor
+├── settings.html/.js     # Full settings page: command library, import/export, Instances, Support
+├── icons/                # Extension icons + UPI QR asset
+└── lib/                  # Bundled CodeMirror + js-beautify for the script editor
 ```
 
----
+## Contributing
 
-## Permissions
+Issues and pull requests are welcome. If you run into a bug, please include:
+the ServiceNow version/theme you're on (UI16 / Now Experience), the browser
+and version, and steps to reproduce.
 
-| Permission | Reason |
-|---|---|
-| `activeTab` | Run scripts on the current tab |
-| `tabs` | Find open ServiceNow tabs to run commands on |
-| `storage` | Save commands and theme preference locally |
-| `*://*.service-now.com/*` | Inject the palette on ServiceNow instances |
+## Support this project
 
----
+SN Commands is built and maintained in spare time. If it saves you time:
 
-## Development notes
+- ☕ **International:** [ko-fi.com/ysaryan](https://ko-fi.com/ysaryan)
+- 🇮🇳 **India (UPI):** `ysaryanraj@okaxis` — QR code is in the Support panel
+  inside the extension's settings page.
+- ⭐ Starring this repo also helps a lot — it costs nothing and helps others
+  discover the project.
 
-- Built with plain JavaScript (no build step, no dependencies).
-- Uses **Manifest V2** for Firefox compatibility.
-- The palette is injected into **all frames** (`all_frames: true`) to work inside ServiceNow's iframes.
-- All palette variables are scoped inside an IIFE to avoid polluting `window`.
+## Community
 
----
+Join the community / follow updates at
+[sncommands.ysaryan.eu.org](https://sncommands.ysaryan.eu.org).
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

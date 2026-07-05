@@ -81,6 +81,8 @@
     flex-shrink: 0;
   }
   .icon-btn:hover { border-color: var(--accent); background: var(--bg3); }
+  .icon-btn-support { color: #ec4899; }
+  .icon-btn-support:hover { border-color: #ec4899; background: rgba(236,72,153,0.12); }
 
   /* Main */
   .main { display: flex; flex: 1; overflow: hidden; }
@@ -103,7 +105,7 @@
   .cmd-list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
   .cmd-item {
     padding: 9px 12px; cursor: pointer; border-bottom: 1px solid var(--border);
-    border-left: 3px solid transparent; transition: background 0.1s;
+    border-left: 3px solid transparent;
   }
   .cmd-item:hover { background: var(--bg); }
   .cmd-item.active { background: var(--bg3); border-left-color: var(--accent); }
@@ -144,11 +146,52 @@
   .script-area {
     flex: 1; width: 100%; min-height: 0;
     background: var(--bg2); border: 1px solid var(--border); border-radius: 5px;
-    padding: 10px; color: var(--text); font-family: 'Courier New', monospace;
+    padding: 10px; font-family: 'Courier New', monospace;
     font-size: 11px; line-height: 1.6; outline: none; resize: none;
     transition: border-color 0.15s;
   }
   .script-area:focus { border-color: var(--accent); }
+
+  /* Syntax-highlighted read-only view */
+  .script-highlight {
+    flex: 1; width: 100%; min-height: 0; overflow: auto;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 5px;
+    padding: 10px; font-family: 'Courier New', monospace;
+    font-size: 11px; line-height: 1.6; white-space: pre; tab-size: 4;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+  /* Token colours — dark theme */
+  :root[data-theme="dark"] {
+    --tok-kw:      #ff79c6;
+    --tok-str:     #f1fa8c;
+    --tok-num:     #bd93f9;
+    --tok-cmt:     #6272a4;
+    --tok-fn:      #50fa7b;
+    --tok-rx:      #ffb86c;
+    --tok-punct:   #ff79c6;
+    --tok-prop:    #8be9fd;
+    --tok-plain:   #f8f8f2;
+  }
+  /* Token colours — light theme */
+  :root[data-theme="light"] {
+    --tok-kw:      #d63384;
+    --tok-str:     #c0392b;
+    --tok-num:     #6f42c1;
+    --tok-cmt:     #6c757d;
+    --tok-fn:      #198754;
+    --tok-rx:      #e67e22;
+    --tok-punct:   #d63384;
+    --tok-prop:    #0d6efd;
+    --tok-plain:   #212529;
+  }
+  .tok-kw    { color: var(--tok-kw);    font-weight: bold; }
+  .tok-str   { color: var(--tok-str);   }
+  .tok-num   { color: var(--tok-num);   }
+  .tok-cmt   { color: var(--tok-cmt);   font-style: italic; }
+  .tok-fn    { color: var(--tok-fn);    }
+  .tok-rx    { color: var(--tok-rx);    }
+  .tok-punct { color: var(--tok-punct); }
+  .tok-prop  { color: var(--tok-prop);  }
 
   .action-bar { display: flex; gap: 8px; justify-content: space-between; align-items: center; flex-shrink: 0; }
   .action-left  { display: flex; gap: 8px; }
@@ -218,6 +261,9 @@
   </div>
   <div class="header-actions">
     <button class="icon-btn" id="btnTheme" title="Toggle light/dark theme">🌙</button>
+    <button class="icon-btn icon-btn-support" id="btnPopupSupport" title="Support the project">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-6.716-4.35-9.428-8.06C.86 10.44 1.02 7.2 3.34 5.34 5.4 3.69 8.28 4.06 10 6.02L12 8.3l2-2.28c1.72-1.96 4.6-2.33 6.66-.68 2.32 1.86 2.48 5.1.77 7.6C18.716 16.65 12 21 12 21z"/></svg>
+    </button>
     <button class="icon-btn" id="btnSettings" title="Open full settings page">⚙️</button>
     <button class="btn btn-primary"   id="btnNew">+ New</button>
   </div>

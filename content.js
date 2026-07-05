@@ -1,17 +1,9 @@
 'use strict';
 
-// ── Run script injected from popup ────────────────────────────────────────────
-browser.runtime.onMessage.addListener(function(msg) {
-    if (!msg || msg.source !== 'SN_COMMANDS_RUN') return;
-    try {
-        const s = document.createElement('script');
-        s.textContent = msg.script;
-        document.head.appendChild(s);
-        s.remove();
-    } catch (e) {
-        console.error('[SN Commands] Script error:', e);
-    }
-});
+// NOTE (MV3): Script execution is now handled by the background service worker.
+// Popup sends directly to background via chrome.runtime.sendMessage (SN_COMMANDS_EXEC_TAB).
+// The palette's runCmd() below also sends directly to background (SN_COMMANDS_EXEC).
+// No content-script relay is needed.
 
 // ── Backslash command palette ─────────────────────────────────────────────────
 (function() {
@@ -26,7 +18,7 @@ browser.runtime.onMessage.addListener(function(msg) {
     let isOpen    = false;
 
     function loadCmds(cb) {
-        browser.storage.local.get('snCommands', (res) => {
+        chrome.storage.local.get('snCommands', (res) => {
             commands = res.snCommands || [];
             cb && cb();
         });
@@ -61,7 +53,7 @@ browser.runtime.onMessage.addListener(function(msg) {
     };
     let currentTheme = 'dark';
     // Load once; update palette if already open
-    browser.storage.local.get('snTheme', (r) => {
+    chrome.storage.local.get('snTheme', (r) => {
         currentTheme = (r.snTheme === 'light') ? 'light' : 'dark';
         if (palette) applyThemeToPalette();
     });
@@ -94,6 +86,16 @@ browser.runtime.onMessage.addListener(function(msg) {
         });
     }
 
+    // Updates just the "↵" indicator on rows in place (no DOM rebuild),
+    // used when hovering so we never destroy the element under the cursor.
+    function markActiveRow() {
+        if (!listEl) return;
+        listEl.querySelectorAll('.sn-cmd-item').forEach((item) => {
+            const isActive = parseInt(item.dataset.idx, 10) === activeIdx;
+            const enterEl = item.querySelector('.sn-item-enter');
+            if (enterEl) enterEl.textContent = isActive ? '↵' : '';
+        });
+    }
 
     function buildPalette() {
         if (palette) return;
@@ -165,6 +167,7 @@ browser.runtime.onMessage.addListener(function(msg) {
         input.addEventListener('input', () => { activeIdx = 0; renderPalette(input.value); });
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Escape')    { e.preventDefault(); closePalette(); return; }
+            if (e.key === 'Backspace' && input.value === '') { e.preventDefault(); closePalette(); return; }
             if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, filtered.length - 1); renderPalette(input.value); }
             if (e.key === 'ArrowUp')   { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); renderPalette(input.value); }
             if (e.key === 'Enter' && filtered[activeIdx]) { e.preventDefault(); runCmd(filtered[activeIdx]); }
@@ -176,7 +179,14 @@ browser.runtime.onMessage.addListener(function(msg) {
         filtered = commands.filter(c =>
             c.name.toLowerCase().includes(filter) ||
             (c.hint || '').toLowerCase().includes(filter)
-        );
+        ).sort((a, b) => {
+            const aHas = a.order != null && a.order !== '';
+            const bHas = b.order != null && b.order !== '';
+            if (aHas && bHas) return a.order - b.order;
+            if (aHas) return -1;
+            if (bHas) return 1;
+            return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        });
         listEl.innerHTML = '';
         const t = THEMES[currentTheme];
 
@@ -223,6 +233,7 @@ browser.runtime.onMessage.addListener(function(msg) {
             hintEl.textContent = cmd.hint || '';
 
             const enterEl = document.createElement('span');
+            enterEl.className = 'sn-item-enter';
             Object.assign(enterEl.style, {
                 color: t.textDim, fontSize: '10px',
                 background: t.border2, padding: '2px 6px',
@@ -234,8 +245,31 @@ browser.runtime.onMessage.addListener(function(msg) {
             item.appendChild(hintEl);
             item.appendChild(enterEl);
 
-            item.addEventListener('mouseenter', () => { activeIdx = idx; renderPalette(input.value); });
-            item.addEventListener('click', () => runCmd(cmd));
+            // Hover just updates the active index/styling in place — it must NOT
+            // tear down and rebuild the list (that was destroying/recreating the
+            // very node the pointer was over mid-hover, which could make the
+            // subsequent click never land on a live element).
+            item.addEventListener('mouseenter', () => { activeIdx = idx; applyThemeToList(); markActiveRow(); });
+
+            // Some ServiceNow (UI16/Now Experience) pages install their own
+            // document-level click handlers that can swallow the event before
+            // it reaches us. Fire on mousedown (capture) as the primary trigger —
+            // it happens earlier in the sequence and is far less likely to be
+            // intercepted — and stop it from propagating into the page. Keep a
+            // click listener too as a harmless fallback for normal pages.
+            let firedByMouseDown = false;
+            item.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                firedByMouseDown = true;
+                runCmd(cmd);
+            }, true);
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (firedByMouseDown) { firedByMouseDown = false; return; }
+                runCmd(cmd);
+            });
             listEl.appendChild(item);
         });
     }
@@ -244,7 +278,15 @@ browser.runtime.onMessage.addListener(function(msg) {
         if (isOpen) return;
         loadCmds(() => {
             buildPalette();
-            filtered  = commands.slice();
+            // Sort by custom order, then alphabetically
+        filtered  = commands.slice().sort((a, b) => {
+            const aHas = a.order != null && a.order !== '';
+            const bHas = b.order != null && b.order !== '';
+            if (aHas && bHas) return a.order - b.order;
+            if (aHas) return -1;
+            if (bHas) return 1;
+            return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        });
             activeIdx = 0;
             isOpen    = true;
             input.value = '';
@@ -274,14 +316,13 @@ browser.runtime.onMessage.addListener(function(msg) {
     function runCmd(cmd) {
         closePalette();
         setTimeout(function() {
-            try {
-                const s = document.createElement('script');
-                s.textContent = cmd.script;
-                document.head.appendChild(s);
-                s.remove();
-            } catch (e) {
-                console.error('[SN Commands] Error running:', cmd.name, e);
-            }
+            // Ask background service worker to execute in MAIN world (MV3-safe)
+            chrome.runtime.sendMessage({
+                source: 'SN_COMMANDS_EXEC',
+                script: cmd.script,
+                name:   cmd.name
+                // tabId/frameId resolved by background using sender info
+            }).catch(e => console.error('[SN Commands] Error running:', cmd.name, e));
         }, 50);
     }
 

@@ -1,0 +1,17 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Packaged extension builds (don't commit zips)
+*.zip
+
+# Node (only relevant if you later add a build step)
+node_modules/
+npm-debug.log*
+
+# Local env files
+.env
+.env.local

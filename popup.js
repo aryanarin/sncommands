@@ -1,11 +1,58 @@
 'use strict';
 
+// ── Lightweight JS syntax highlighter ────────────────────────────────────────
+function highlightJS(code) {
+  const KW = /^(break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|finally|for|function|if|import|in|instanceof|let|new|of|return|static|super|switch|this|throw|try|typeof|var|void|while|with|yield|null|true|false|undefined|async|await)\b/;
+  let out = '', i = 0;
+  function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function span(cls, s) { return '<span class="tok-'+cls+'">'+esc(s)+'</span>'; }
+  while (i < code.length) {
+    // Line comment
+    if (code[i]==='/' && code[i+1]==='/') {
+      const end = code.indexOf('\n', i); const e = end===-1 ? code.length : end;
+      out += span('cmt', code.slice(i, e)); i = e; continue;
+    }
+    // Block comment
+    if (code[i]==='/' && code[i+1]==='*') {
+      const end = code.indexOf('*/', i+2); const e = end===-1 ? code.length : end+2;
+      out += span('cmt', code.slice(i, e)); i = e; continue;
+    }
+    // String (single, double, template)
+    if (code[i]==='"' || code[i]==="'" || code[i]==='`') {
+      const q=code[i]; let j=i+1, s=q;
+      while(j<code.length){ const c=code[j]; s+=c; if(c==='\\'){j++;if(j<code.length)s+=code[j];}else if(c===q)break; j++; }
+      out += span('str', s); i = j+1; continue;
+    }
+    // Number
+    if (/[0-9]/.test(code[i]) || (code[i]==='.' && /[0-9]/.test(code[i+1]||''))) {
+      let j=i; while(j<code.length && /[0-9a-fA-FxX_\.eEbBoO]/.test(code[j]))j++;
+      out += span('num', code.slice(i,j)); i=j; continue;
+    }
+    // Keyword or identifier
+    if (/[a-zA-Z_$]/.test(code[i])) {
+      let j=i; while(j<code.length && /[\w$]/.test(code[j]))j++;
+      const word = code.slice(i,j);
+      if (KW.test(word)) { out += span('kw', word); }
+      else if (code[j]==='(') { out += span('fn', word); }
+      else if (i>0 && code[i-1]==='.') { out += span('prop', word); }
+      else { out += esc(word); }
+      i=j; continue;
+    }
+    // Punctuation
+    if (/[{}()\[\];,]/.test(code[i])) { out += span('punct', code[i]); i++; continue; }
+    // Anything else (operators, whitespace, newlines)
+    out += esc(code[i]); i++;
+  }
+  return out;
+}
+
 let commands = [];
 let activeId = null;
 
 const btnNew             = document.getElementById('btnNew');
 const btnTheme           = document.getElementById('btnTheme');
 const btnSettings        = document.getElementById('btnSettings');
+const btnPopupSupport    = document.getElementById('btnPopupSupport');
 const searchInput        = document.getElementById('searchInput');
 const cmdList            = document.getElementById('cmdList');
 const rightPanel         = document.getElementById('rightPanel');
@@ -26,17 +73,21 @@ function applyTheme(theme) {
   btnTheme.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
 }
 function loadTheme() {
-  browser.storage.local.get('snTheme', r => applyTheme(r.snTheme || 'dark'));
+  chrome.storage.local.get('snTheme', r => applyTheme(r.snTheme || 'dark'));
 }
 btnTheme.addEventListener('click', () => {
   const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-  browser.storage.local.set({ snTheme: next });
+  chrome.storage.local.set({ snTheme: next });
   applyTheme(next);
 });
 
 // ── Open full settings page in a new tab ──────────────────────────────────────
 btnSettings.addEventListener('click', () => {
-  browser.tabs.create({ url: browser.runtime.getURL('settings.html') });
+  chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
+  window.close();
+});
+btnPopupSupport.addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') + '?openSupport=1' });
   window.close();
 });
 
@@ -49,10 +100,10 @@ function showToast(msg) {
 
 // ── Storage ───────────────────────────────────────────────────────────────────
 function load(cb) {
-  browser.storage.local.get('snCommands', r => { commands = r.snCommands || []; cb(); });
+  chrome.storage.local.get('snCommands', r => { commands = r.snCommands || []; cb(); });
 }
 function save(cb) {
-  browser.storage.local.set({ snCommands: commands }, cb);
+  chrome.storage.local.set({ snCommands: commands }, cb);
 }
 
 // ── Render list ───────────────────────────────────────────────────────────────
@@ -147,11 +198,13 @@ function buildEditor(cmd) {
   scriptLabelRow.appendChild(scriptLbl);
   scriptLabelRow.appendChild(maxBtn);
 
+  const scriptSrc = cmd ? (cmd.script || '') : '(function() {\n    // your code here\n    \n})();';
   const scriptArea = document.createElement('textarea');
   scriptArea.className = 'script-area';
   scriptArea.id = 'fieldScript';
+  scriptArea.value = scriptSrc;
   scriptArea.spellcheck = false;
-  scriptArea.value = cmd ? (cmd.script || '') : '(function() {\n    // your code here\n    \n})();';
+  scriptArea.placeholder = '// your code here';
 
   scriptSection.appendChild(scriptLabelRow);
   scriptSection.appendChild(scriptArea);
@@ -201,8 +254,7 @@ function buildEditor(cmd) {
 
     if (!name)   { nameInput.classList.add('error'); nameInput.focus(); return; }
     nameInput.classList.remove('error');
-    if (!script) { scriptArea.classList.add('error'); scriptArea.focus(); return; }
-    scriptArea.classList.remove('error');
+    if (!script) { showToast('⚠️ Script is empty!'); return; }
 
     const dupe = commands.find(c => c.name.toLowerCase() === name.toLowerCase() && c.id !== activeId);
     if (dupe) { nameInput.classList.add('error'); showToast('⚠️ Name already exists!'); return; }
@@ -260,8 +312,10 @@ btnFullscreenClose.addEventListener('click', closeFullscreen);
 
 // "Apply & Close" — copies content back to the normal script area
 btnFullscreenSave.addEventListener('click', () => {
-  const scriptArea = document.getElementById('fieldScript');
-  if (scriptArea) scriptArea.value = fullscreenTextarea.value;
+  const scriptPre = rightPanel.querySelector('#fieldScript');
+  if (scriptPre) {
+    scriptPre.value = fullscreenTextarea.value;
+  }
   closeFullscreen();
   showToast('📋 Script updated — click Save to persist');
 });
@@ -278,16 +332,43 @@ btnNew.addEventListener('click', () => { activeId = null; buildEditor(null); ren
 searchInput.addEventListener('input', renderList);
 
 // ── Run script on SN tab ──────────────────────────────────────────────────────
+// A tab counts as a "ServiceNow tab" if it's on the built-in domains, one of
+// the user's configured custom/on-prem domains (see Settings → Instances), or
+// "all sites" has been enabled there.
+async function isKnownSNTab(tab) {
+  if (!tab || !tab.url) return false;
+  if (tab.url.includes('service-now.com')) return true;
+  try {
+    const { snAllUrls, snCustomDomains } = await chrome.storage.local.get(['snAllUrls', 'snCustomDomains']);
+    if (snAllUrls) return true;
+    const host = new URL(tab.url).hostname;
+    return (snCustomDomains || []).some(pattern => {
+      const domain = pattern.replace(/^\*:\/\//, '').replace(/\/\*$/, '').replace(/^\*\./, '');
+      return host === domain || host.endsWith('.' + domain);
+    });
+  } catch (err) { return false; }
+}
+
+// MV3: send to background service worker which uses chrome.scripting.executeScript
+// (MAIN world) instead of DOM <script> injection.
 async function runScript(script, name) {
   try {
-    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     let tab = tabs[0];
-    if (!tab || !tab.url || (!tab.url.includes('service-now.com') && !tab.url.includes('mercedes-benz.com'))) {
-      const allTabs = await browser.tabs.query({});
-      tab = allTabs.find(t => t.url && (t.url.includes('service-now.com') || t.url.includes('mercedes-benz.com')));
+    if (!(await isKnownSNTab(tab))) {
+      const allTabs = await chrome.tabs.query({});
+      tab = null;
+      for (const t of allTabs) { if (await isKnownSNTab(t)) { tab = t; break; } }
     }
     if (!tab) { showToast('❌ No ServiceNow tab found!'); return; }
-    await browser.tabs.sendMessage(tab.id, { source: 'SN_COMMANDS_RUN', script });
+    const resp = await chrome.runtime.sendMessage({
+      source: 'SN_COMMANDS_EXEC_TAB',
+      tabId:  tab.id,
+      frameId: 0,
+      script,
+      name
+    });
+    if (resp && resp.ok === false) throw new Error(resp.error || 'Unknown error');
     showToast('▶ Running: \\' + (name || 'command'));
   } catch (err) {
     showToast('❌ ' + err.message);
