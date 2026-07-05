@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — SN Commands</title>
+<style>
+  :root {
+    --blue-dark: #0a3c82;
+    --blue-mid: #0070d2;
+    --blue-pale: #eaf2fc;
+    --ink: #1a2433;
+    --ink-soft: #4b5b70;
+    --line: #dce6f2;
+    --bg: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.65;
+  }
+  header {
+    background: linear-gradient(135deg, var(--blue-dark), var(--blue-mid));
+    color: #fff;
+    padding: 56px 24px 48px;
+  }
+  .header-inner {
+    max-width: 760px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .mark {
+    width: 56px;
+    height: 56px;
+    flex: none;
+    background: #fff;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 28px;
+    color: var(--blue-mid);
+  }
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 28px;
+    letter-spacing: -0.01em;
+  }
+  header p {
+    margin: 0;
+    color: #cfe2fa;
+    font-size: 15px;
+  }
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  .updated {
+    display: inline-block;
+    font-size: 13px;
+    color: var(--ink-soft);
+    background: var(--blue-pale);
+    border: 1px solid var(--line);
+    padding: 6px 12px;
+    border-radius: 999px;
+    margin-bottom: 32px;
+  }
+  .summary {
+    border: 1px solid var(--line);
+    background: var(--blue-pale);
+    border-radius: 12px;
+    padding: 22px 24px;
+    margin-bottom: 40px;
+  }
+  .summary h2 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--blue-mid);
+  }
+  .summary p {
+    margin: 0;
+    font-size: 17px;
+    color: var(--ink);
+  }
+  h2.section {
+    font-size: 20px;
+    margin: 40px 0 12px;
+    padding-top: 4px;
+    color: var(--ink);
+  }
+  h3 {
+    font-size: 16px;
+    margin: 24px 0 8px;
+    color: var(--ink);
+  }
+  p, li {
+    font-size: 15.5px;
+    color: var(--ink-soft);
+  }
+  ul {
+    padding-left: 20px;
+    margin: 8px 0;
+  }
+  li {
+    margin-bottom: 6px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 8px;
+    font-size: 14.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    color: var(--ink);
+    font-weight: 600;
+    background: #f7fafd;
+  }
+  code {
+    background: #f0f4f9;
+    padding: 1px 6px;
+    border-radius: 5px;
+    font-size: 0.92em;
+    color: var(--blue-dark);
+  }
+  a {
+    color: var(--blue-mid);
+    text-decoration: none;
+  }
+  a:hover { text-decoration: underline; }
+  footer {
+    border-top: 1px solid var(--line);
+    margin-top: 56px;
+    padding-top: 24px;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="mark">\</div>
+    <div>
+      <h1>Privacy Policy</h1>
+      <p>SN Commands — a Chrome extension for ServiceNow</p>
+    </div>
+  </div>
+</header>
+
+<main>
+  <span class="updated">Last updated: July 5, 2026</span>
+
+  <div class="summary">
+    <h2>In short</h2>
+    <p>SN Commands does not collect, transmit, sell, or share any of your data. Everything you create in the extension — your commands, scripts, and settings — stays on your own device, in your browser's local storage. Nothing is ever sent to us or to any third party.</p>
+  </div>
+
+  <h2 class="section">What SN Commands does</h2>
+  <p>SN Commands lets you save short JavaScript snippets as named "backslash commands" (e.g. <code>\resolveinc</code>) and run them instantly from a command palette while you're on a ServiceNow page. It's a personal productivity tool: you write the commands, you decide when to run them, and you control which sites it can access.</p>
+
+  <h2 class="section">Data we collect</h2>
+  <p>None. SN Commands has no server, no analytics, and no network requests of any kind. We have no way to see your commands, your settings, or anything about how you use the extension.</p>
+
+  <h2 class="section">Data stored on your device</h2>
+  <p>The extension uses Chrome's local storage (<code>chrome.storage.local</code>) — a sandboxed storage area on your own device — to remember:</p>
+  <ul>
+    <li>The commands and scripts you create (their names, hints, and script text)</li>
+    <li>Your theme preference (light or dark)</li>
+    <li>Which ServiceNow domains you've approved the extension to run on, if you've added custom or on-prem domains</li>
+  </ul>
+  <p>This data never leaves your device. It is not synced to any external server, not readable by us, and is removed automatically if you uninstall the extension or clear its storage.</p>
+
+  <h2 class="section">Permissions we request, and why</h2>
+  <table>
+    <tr><th>Permission</th><th>Why it's needed</th></tr>
+    <tr>
+      <td><code>activeTab</code> / <code>tabs</code></td>
+      <td>To find the ServiceNow tab you want to run a command against when you use the popup.</td>
+    </tr>
+    <tr>
+      <td><code>storage</code></td>
+      <td>To save your commands and settings locally, as described above.</td>
+    </tr>
+    <tr>
+      <td><code>scripting</code></td>
+      <td>To inject the command palette into the page and to run the exact script you saved when you choose to run a command.</td>
+    </tr>
+    <tr>
+      <td>Host access to <code>*.service-now.com</code>, and optionally to other domains you add or "all sites"</td>
+      <td>So the palette works on your ServiceNow instance. Many organizations run ServiceNow on a custom or on-prem domain rather than service-now.com, so you can optionally grant access to those specific domains, or to all sites, from the extension's settings. Host access is only ever used to load the palette and run your own saved script on that page.</td>
+    </tr>
+  </table>
+
+  <h3>A note on how commands run</h3>
+  <p>When you run a saved command, SN Commands executes that exact script in the current page so it can interact with ServiceNow's page APIs (like <code>g_form</code>). The script that runs is always the one you wrote and saved yourself — it is never downloaded from the internet, and SN Commands does not modify it.</p>
+
+  <h2 class="section">Third parties</h2>
+  <p>SN Commands does not share data with any third party, because it does not collect any data to share. The extension does not include analytics SDKs, ad SDKs, or crash reporting services.</p>
+
+  <h2 class="section">Children's privacy</h2>
+  <p>SN Commands is a developer productivity tool for ServiceNow professionals and is not directed at children. It does not knowingly collect information from anyone.</p>
+
+  <h2 class="section">Changes to this policy</h2>
+  <p>If this policy ever changes — for example, if a future version adds an optional feature that involves data leaving your device — this page will be updated first, and the "Last updated" date above will change.</p>
+
+  <h2 class="section">Contact</h2>
+  <p>Questions about this policy or the extension are welcome via <a href="https://github.com/aryanarin/sncommands/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>.</p>
+
+  <footer>
+    SN Commands is an independent, open-source project and is not affiliated with or endorsed by ServiceNow, Inc.
+  </footer>
+</main>
+
+</body>
+</html>
