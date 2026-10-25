@@ -120,6 +120,87 @@ function snCleanHost(raw) {
     return host;
 }
 
+// ── Is this page a ServiceNow instance? ──────────────────────────────────────
+// Settings → Instances can register the content script on every site, because an
+// on-prem instance can live on any hostname and the extension has no way of
+// knowing it in advance. The \ palette is fine with that — it only appears when
+// you type \ into an empty field. Anything that *restyles* or *talks to* the page
+// is not, so those features check here first.
+//
+// Two independent answers, either of which is enough:
+//
+//   snHostIsKnownInstance      configuration says so — a service-now.com host, a
+//                              domain added under Instances, or a host mapped to
+//                              a theme.
+//   snDocumentLooksLikeServiceNow
+//                              the document carries ServiceNow's own markers.
+//                              This is what covers an on-prem host reached under
+//                              "enable on all websites" that was never named.
+
+// service-now.com is the commercial cloud; servicenowservices.com is the
+// government one. Both are ServiceNow's, whatever the instance is called.
+var SN_SERVICENOW_CLOUD_DOMAINS = ['service-now.com', 'servicenowservices.com'];
+
+// Deliberately narrow: every one of these is something only a ServiceNow-rendered
+// document has. Next Experience and workspace shells, the classic frameset, the
+// CSRF token input on classic forms and lists, and ServiceNow's own asset paths.
+var SN_SERVICENOW_DOM_MARKERS = [
+    'sn-polaris-layout',
+    'sn-polaris-header',
+    'macroponent-f51912f4c700201072b211d4d8c26010',
+    'now-icon',
+    '#gsft_main',
+    '#gsft_nav',
+    'iframe[name="gsft_main"]',
+    'input[name="sysparm_ck"]',
+    'link[href*="/styles/heisenberg"]',
+    'script[src*="/scripts/js_includes"]',
+    '[src*="/uxasset/"]',
+    '[href*="/uxasset/"]'
+];
+
+// "*://acme.example.com/*", "*.example.com" and "example.com" all reduce to the
+// bare domain, which then matches itself or anything beneath it. Accepting both
+// shapes matters because the stored instance list holds match patterns while the
+// theme map holds plain hostnames.
+function snHostMatchesDomain(hostname, domainOrPattern) {
+    const host = snCleanHost(hostname);
+    const domain = snCleanHost(
+        String(domainOrPattern == null ? '' : domainOrPattern)
+            .replace(/^\*:\/\//, '')
+            .replace(/\/\*$/, '')
+    ).replace(/^\*\./, '');
+
+    if (!host || !domain) return false;
+    return host === domain || host.endsWith('.' + domain);
+}
+
+function snIsServiceNowCloudHost(hostname) {
+    return SN_SERVICENOW_CLOUD_DOMAINS.some(d => snHostMatchesDomain(hostname, d));
+}
+
+function snHostIsKnownInstance(hostname, themeHosts, customDomains) {
+    if (snIsServiceNowCloudHost(hostname)) return true;
+
+    const mapped = (themeHosts && typeof themeHosts === 'object') ? Object.keys(themeHosts) : [];
+    if (mapped.some(h => snHostMatchesDomain(hostname, h))) return true;
+
+    const domains = Array.isArray(customDomains) ? customDomains : [];
+    return domains.some(p => snHostMatchesDomain(hostname, p));
+}
+
+function snDocumentLooksLikeServiceNow(doc) {
+    const d = doc || (typeof document !== 'undefined' ? document : null);
+    if (!d || typeof d.querySelector !== 'function') return false;
+
+    for (let i = 0; i < SN_SERVICENOW_DOM_MARKERS.length; i++) {
+        // One unsupported selector must not take the rest of the list with it.
+        try { if (d.querySelector(SN_SERVICENOW_DOM_MARKERS[i])) return true; }
+        catch (e) { /* skip */ }
+    }
+    return false;
+}
+
 // Which theme applies on a given hostname?
 //
 // An exact mapping wins. Failing that, the longest matching parent domain wins, so

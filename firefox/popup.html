@@ -8,6 +8,7 @@
      toolbar icon; the muted/dim greys were lifted so hints and placeholders
      actually clear 4.5:1 against the panel they sit on. */
   :root[data-theme="dark"] {
+    color-scheme: dark;
     --bg:         #0d1117;
     --bg2:        #161b22;
     --bg3:        #0d2137;
@@ -21,11 +22,13 @@
     --accent-h:   #0055a5;
     --accent-fg:  #4da3e8;   /* accent text on dark surfaces */
     --danger:     #f87171;
+    --danger-solid: #b91c1c; /* filled state — white text stays at 6.5:1 */
     --toast-bg:   #1e293b;
     --toast-border:#334155;
     --toast-text: #f1f5f9;
   }
   :root[data-theme="light"] {
+    color-scheme: light;
     --bg:         #f1f5f9;
     --bg2:        #ffffff;
     --bg3:        #dbeafe;
@@ -33,12 +36,13 @@
     --border2:    #cbd5e1;
     --text:       #0f172a;
     --text-muted: #475569;   /* 7.4:1 on --bg2 */
-    --text-dim:   #64748b;   /* 5.3:1 on --bg2 — hints and placeholders */
+    --text-dim:   #55657a;   /* 5.9:1 on --bg2, 5.4:1 on --bg */
     --text-mono:  #1d4ed8;
     --accent:     #0070d2;
     --accent-h:   #0055a5;
     --accent-fg:  #0058a8;
-    --danger:     #dc2626;
+    --danger:     #b91c1c;   /* 6.0:1 on --bg */
+    --danger-solid: #b91c1c; /* 6.5:1 against white */
     --toast-bg:   #1e293b;
     --toast-border:#334155;
     --toast-text: #f1f5f9;
@@ -83,7 +87,7 @@
   .btn-secondary { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border2); }
   .btn-secondary:hover { background: var(--border); color: var(--text); }
   .btn-danger    { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
-  .btn-danger:hover    { background: var(--danger); color: #fff; }
+  .btn-danger:hover    { background: var(--danger-solid); border-color: var(--danger-solid); color: #fff; }
 
   /* Icon buttons in header */
   .icon-btn {
@@ -153,6 +157,7 @@
   .field-input:focus { border-color: var(--accent); }
   .field-input.mono { font-family: monospace; }
   .field-input.error { border-color: var(--danger); }
+  .field-input::placeholder, .script-area::placeholder { color: var(--text-dim); opacity: 1; }
 
   .script-section { display: flex; flex-direction: column; flex: 1; gap: 4px; min-height: 0; }
   .script-label-row { display: flex; align-items: center; justify-content: space-between; }
@@ -168,6 +173,8 @@
     background: var(--bg2); border: 1px solid var(--border); border-radius: 5px;
     padding: 10px; font-family: 'Courier New', monospace;
     font-size: 11px; line-height: 1.6; outline: none; resize: none;
+    color: var(--text); caret-color: var(--text);
+    scrollbar-width: thin; scrollbar-color: var(--border2) transparent;
     transition: border-color 0.15s;
   }
   .script-area:focus { border-color: var(--accent); }
@@ -178,6 +185,7 @@
     background: var(--bg2); border: 1px solid var(--border); border-radius: 5px;
     padding: 10px; font-family: 'Courier New', monospace;
     font-size: 11px; line-height: 1.6; white-space: pre; tab-size: 4;
+    color: var(--text);
     scrollbar-width: thin; scrollbar-color: var(--border) transparent;
   }
   /* Token colours — dark theme */
@@ -243,11 +251,12 @@
     display: flex; align-items: center; justify-content: center;
     transition: background 0.15s, color 0.15s;
   }
-  .fullscreen-close-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .fullscreen-close-btn:hover { background: var(--danger-solid); color: #fff; border-color: var(--danger-solid); }
   .fullscreen-textarea {
     flex: 1; width: 100%; background: var(--bg); border: none; outline: none;
-    padding: 16px 20px; color: var(--text); font-family: 'Courier New', monospace;
+    padding: 16px 20px; color: var(--text); caret-color: var(--text); font-family: 'Courier New', monospace;
     font-size: 12px; line-height: 1.7; resize: none;
+    scrollbar-width: thin; scrollbar-color: var(--border2) transparent;
   }
   .fullscreen-footer {
     background: var(--bg2); border-top: 1px solid var(--border);

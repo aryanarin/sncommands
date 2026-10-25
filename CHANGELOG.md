@@ -2,6 +2,80 @@
 
 All notable changes to this project are documented here.
 
+## [4.8.2]
+### Fixed
+- **Script text was invisible in dark mode, in both Chrome and Firefox.** The
+  popup's `.script-area` textarea never set `color`, so it fell back to the
+  browser's default field colour — black — on the dark `#161b22` editor surface.
+  It now uses the theme's text token (and caret colour), and both themes declare
+  `color-scheme` so native controls and scrollbars stop guessing at the theme.
+- **Other text that sat below WCAG AA in one theme or the other:**
+  - Light theme's dim grey and danger red were darkened; the dark theme's filled
+    danger button now uses a solid red that carries white text.
+  - Placeholders in the popup, settings fields and palette no longer use the UA
+    grey; they follow `--text-dim`.
+  - The in-page palette's hint text, `ESC`/`↵` chips, placeholder and caret were
+    retuned for both themes; the palette also exposes its `color-scheme`.
+  - CodeMirror line numbers, Dracula comments and the light theme's matching
+    brackets are now readable; the support button gradient was darkened so its
+    white label clears 4.5:1.
+- Light and dark token sets in `popup.html`/`settings.html` now carry the same
+  names, so a control can't accidentally inherit a colour that only exists in
+  one theme.
+
+### Added
+- `tools/theme-audit.js` — a dependency-free cross-browser contrast audit. It
+  renders the real popup, settings page and in-page palette in headless Chrome
+  (DevTools protocol) and Firefox (WebDriver BiDi), with seeded commands and
+  storage, and checks every visible text node, control value and placeholder
+  against its computed background. 20 scenarios × both themes = 40 checks per
+  browser, covering editors, fullscreen, bulk mode, modals and console errors.
+- Static theme checks in `tools/check-wiring.js`: both themes must define every
+  token, every text/surface pair must clear 4.5:1, white-on-accent/danger pairs
+  must pass, the code editor must set an explicit text colour, and the palette's
+  inline theme literals are checked the same way.
+
+## [4.8.1]
+### Fixed
+- **Adding a custom instance domain always failed with "Permission not granted."**
+  Settings → 🌐 Instances read the stored domain list *before* calling
+  `chrome.permissions.request()`. A permission request is only honoured while the
+  click that triggered it is still the active user gesture, and the first `await`
+  in a handler spends that gesture — so the browser refused the request outright,
+  before any prompt was shown, and every on-prem domain came back rejected. The
+  request is now the first `await` in the handler, with the duplicate check done
+  against an in-memory mirror of the list. The "enable on all websites" toggle
+  already had the ordering right and was unaffected.
+- **Unreadable, doubled-up text on unrelated websites.** With the extension enabled
+  on all websites — or on a host added as an instance — the page theme applied
+  itself to every page the content script reached, not just ServiceNow. Its rules
+  reach generic elements including `textarea`, and a site that relies on a textarea
+  being invisible breaks badly: GitHub's code viewer stacks a transparent one over
+  the highlighted source, so forcing a colour onto it rendered every file as two
+  offset copies of itself. The page theme, `Alt+Shift+T` and the page helpers now
+  run only where the page is actually a ServiceNow instance.
+- The keep-alive helper no longer pings ServiceNow session endpoints, with
+  credentials, on non-ServiceNow hosts. Same root cause as above.
+
+### Added
+- `snPageGate` in `content.js`, the single answer to "is this page a ServiceNow
+  instance?", consulted by the page theme and the page helpers. A page qualifies
+  when configuration says so — a `service-now.com` (or `servicenowservices.com`)
+  host, a domain added under Instances, or a host mapped to a theme — or when the
+  document carries ServiceNow's own markers, which is what covers an on-prem host
+  reached under "enable on all websites" that was never named anywhere. Markers are
+  re-checked for ~18s after load, because Polaris finishes booting well after
+  `document_idle` and the answer can legitimately change from no to yes.
+- `check-wiring.js` covers the new gate: lookalike hostnames must not pass, wildcard
+  instance patterns must cover their subdomains, an unconfigured host must be
+  rejected even when other hosts are configured, and no marker may be a selector
+  generic enough to match an ordinary website.
+
+### Notes
+- The `\` palette is deliberately *not* gated. It only appears when you type `\`
+  into an empty field, so it costs an unrelated page nothing, and gating it would
+  break the on-prem case the "all websites" option exists to serve.
+
 ## [4.8.0]
 ### Added
 - **Page helpers**, three independent conveniences with a toggle each, all **off by

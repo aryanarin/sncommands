@@ -994,21 +994,38 @@ function renderDomainList(domains) {
   });
 }
 
+// Mirrors what's in storage, so the duplicate check below can run without an
+// await. See the note in btnAddDomain for why that matters.
+let knownDomains = [];
+
 async function loadInstancesUI() {
   const { snAllUrls, snCustomDomains } = await chrome.storage.local.get(['snAllUrls', 'snCustomDomains']);
   chkAllUrls.checked = !!snAllUrls;
   customDomainsSection.classList.toggle('disabled', !!snAllUrls);
-  renderDomainList(snCustomDomains || []);
+  knownDomains = snCustomDomains || [];
+  renderDomainList(knownDomains);
+}
+
+// A rejected request and a request the browser refused to even show look the same
+// from here, and "Permission not granted" for the latter is misleading. When the
+// call threw, say what it said.
+function permissionFailureMessage(err) {
+  const detail = err && err.message ? String(err.message) : '';
+  return detail ? '❌ ' + detail : '❌ Permission not granted';
 }
 
 chkAllUrls.addEventListener('change', async () => {
   if (chkAllUrls.checked) {
+    // Has to be the first await in this handler: a permission request is only
+    // honoured while the click that triggered it is still the active user gesture,
+    // and any earlier await spends it.
     let granted = false;
+    let error = null;
     try { granted = await chrome.permissions.request({ origins: ['<all_urls>'] }); }
-    catch (err) { granted = false; }
+    catch (err) { granted = false; error = err; }
     if (!granted) {
       chkAllUrls.checked = false;
-      showToast('❌ Permission not granted');
+      showToast(error ? permissionFailureMessage(error) : '❌ Permission not granted');
       return;
     }
     await chrome.storage.local.set({ snAllUrls: true });
@@ -1028,16 +1045,35 @@ btnAddDomain.addEventListener('click', async () => {
   const pattern = domainToPattern(newDomainInput.value);
   if (!pattern) { showToast('⚠️ Enter a valid domain'); return; }
 
-  const { snCustomDomains } = await chrome.storage.local.get('snCustomDomains');
-  const list = snCustomDomains || [];
-  if (list.includes(pattern)) { showToast('⚠️ Already added'); return; }
+  // Everything before the permission request must stay synchronous.
+  //
+  // chrome.permissions.request() is only honoured while the click that triggered
+  // it is still the active user gesture, and the first `await` in a handler spends
+  // that gesture. Reading the stored list first — which is what this used to do —
+  // meant the browser refused the request outright, before any prompt was shown,
+  // and every custom domain came back as "Permission not granted".
+  if (knownDomains.includes(pattern)) {
+    newDomainInput.value = '';
+    showToast('⚠️ Already added');
+    return;
+  }
 
   let granted = false;
+  let error = null;
   try { granted = await chrome.permissions.request({ origins: [pattern] }); }
-  catch (err) { granted = false; }
-  if (!granted) { showToast('❌ Permission not granted'); return; }
+  catch (err) { granted = false; error = err; }
+  if (!granted) {
+    showToast(error ? permissionFailureMessage(error) : '❌ Permission not granted');
+    return;
+  }
 
-  list.push(pattern);
+  // Safe to touch storage now the gesture has been spent. Re-read rather than
+  // trusting the mirror, in case another settings tab added something meanwhile.
+  const { snCustomDomains } = await chrome.storage.local.get('snCustomDomains');
+  const list = snCustomDomains || [];
+  if (!list.includes(pattern)) list.push(pattern);
+
+  knownDomains = list;
   await chrome.storage.local.set({ snCustomDomains: list });
   notifyBackgroundToSync();
   renderDomainList(list);
@@ -1050,6 +1086,7 @@ async function removeDomain(pattern) {
   const { snCustomDomains } = await chrome.storage.local.get('snCustomDomains');
   const list = (snCustomDomains || []).filter(p => p !== pattern);
   try { await chrome.permissions.remove({ origins: [pattern] }); } catch (err) {}
+  knownDomains = list;
   await chrome.storage.local.set({ snCustomDomains: list });
   notifyBackgroundToSync();
   renderDomainList(list);

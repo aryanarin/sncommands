@@ -7,15 +7,16 @@
 
 // ── Backslash command palette ─────────────────────────────────────────────────
 (function() {
-    let palette   = null;
-    let input     = null;
-    let listEl    = null;
-    let header    = null;
-    let hint      = null;
-    let commands  = [];
-    let filtered  = [];
-    let activeIdx = 0;
-    let isOpen    = false;
+    let palette      = null;
+    let paletteStyle = null;
+    let input        = null;
+    let listEl       = null;
+    let header       = null;
+    let hint         = null;
+    let commands     = [];
+    let filtered     = [];
+    let activeIdx    = 0;
+    let isOpen       = false;
 
     function loadCmds(cb) {
         chrome.storage.local.get('snCommands', (res) => {
@@ -33,8 +34,8 @@
             border:    '#1f2937',
             border2:   '#2d3748',
             text:      '#e2e8f0',
-            textMuted: '#64748b',
-            textDim:   '#4a5568',
+            textMuted: '#94a3b8',
+            textDim:   '#7d8b9c',
             textMono:  '#38bdf8',
             accent:    '#0070d2',
         },
@@ -46,7 +47,7 @@
             border2:   '#cbd5e1',
             text:      '#0f172a',
             textMuted: '#475569',
-            textDim:   '#94a3b8',
+            textDim:   '#55657a',
             textMono:  '#1d4ed8',
             accent:    '#0070d2',
         }
@@ -65,16 +66,24 @@
         applyThemeToPalette();
         if (isOpen) renderPalette(input ? input.value : '');
     });
+    // The placeholder is the only text inside the palette that can't take an
+    // inline colour, so it needs a scoped rule. Rebuilt whenever the theme flips.
+    function paletteCss(t) {
+        return '#sn-cmd-palette input::placeholder{color:' + t.textDim + ';opacity:1}' +
+               '#sn-cmd-palette input{caret-color:' + t.text + '}';
+    }
     function applyThemeToPalette() {
         if (!palette) return;
         const t = THEMES[currentTheme];
         Object.assign(palette.style, {
-            background: t.bg,
-            border:     '1px solid ' + t.accent,
+            background:  t.bg,
+            border:      '1px solid ' + t.accent,
+            colorScheme: currentTheme,
         });
+        if (paletteStyle) paletteStyle.textContent = paletteCss(t);
         if (header)  Object.assign(header.style,  { background: t.bg2, borderBottom: '1px solid ' + t.border });
         if (input)   Object.assign(input.style,   { color: t.text });
-        if (hint)    Object.assign(hint.style,     { color: t.textDim, background: t.border2 });
+        if (hint)    Object.assign(hint.style,     { color: t.text, background: t.border2 });
         if (listEl)  applyThemeToList();
     }
     function applyThemeToList() {
@@ -87,10 +96,12 @@
                 borderLeft:  isActive ? '3px solid ' + t.accent : '3px solid transparent',
                 borderBottom: '1px solid ' + t.border,
             });
-            const nameEl = item.querySelector('.sn-item-name');
-            const hintEl = item.querySelector('.sn-item-hint');
-            if (nameEl) nameEl.style.color = t.textMono;
-            if (hintEl) hintEl.style.color = t.textMuted;
+            const nameEl  = item.querySelector('.sn-item-name');
+            const hintEl  = item.querySelector('.sn-item-hint');
+            const enterEl = item.querySelector('.sn-item-enter');
+            if (nameEl)  nameEl.style.color  = t.textMono;
+            if (hintEl)  hintEl.style.color  = t.textMuted;
+            if (enterEl) enterEl.style.color = t.text;
         });
     }
 
@@ -110,6 +121,7 @@
         const t = THEMES[currentTheme];
 
         palette = document.createElement('div');
+        palette.id = 'sn-cmd-palette';
         Object.assign(palette.style, {
             position:     'fixed',
             top:          '80px',
@@ -123,8 +135,13 @@
             zIndex:       '2147483647',
             fontFamily:   '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
             overflow:     'hidden',
-            display:      'none'
+            display:      'none',
+            colorScheme:  currentTheme
         });
+
+        paletteStyle = document.createElement('style');
+        paletteStyle.textContent = paletteCss(t);
+        palette.appendChild(paletteStyle);
 
         // Header
         header = document.createElement('div');
@@ -156,7 +173,7 @@
         hint = document.createElement('span');
         hint.textContent = 'ESC';
         Object.assign(hint.style, {
-            fontSize: '10px', color: t.textDim,
+            fontSize: '10px', color: t.text,
             background: t.border2, padding: '2px 6px',
             borderRadius: '3px'
         });
@@ -243,7 +260,7 @@
             const enterEl = document.createElement('span');
             enterEl.className = 'sn-item-enter';
             Object.assign(enterEl.style, {
-                color: t.textDim, fontSize: '10px',
+                color: t.text, fontSize: '10px',
                 background: t.border2, padding: '2px 6px',
                 borderRadius: '3px', flexShrink: '0'
             });
@@ -398,6 +415,99 @@
 // throws — a Polaris DOM change, a locked-down frame — the command palette above
 // carries on working regardless. Palettes and helpers come from themes.js, which
 // the manifest loads first.
+// ── Is this page actually a ServiceNow instance? ──────────────────────────────
+// Settings → Instances can register this content script on <all_urls>, since an
+// on-prem instance can be on any hostname. The palette copes with that — it only
+// opens when you ask it to. The page theme and the keep-alive ping cannot:
+//
+//   • The theme's rules are written against ServiceNow's DOM but reach generic
+//     elements, `textarea` among them. An unrelated site may be relying on a
+//     textarea being invisible: GitHub's code viewer stacks a transparent one on
+//     top of the highlighted source, so forcing a colour onto it rendered every
+//     file as two offset copies of itself, unreadable.
+//   • The keep-alive would otherwise request ServiceNow session endpoints, with
+//     credentials, against whatever host the tab happens to be on.
+//
+// So both ask here first. Configuration answers it outright in most cases. The DOM
+// markers cover an unnamed on-prem host under "enable on all websites", and get
+// re-checked for a short while because Polaris finishes booting some way after
+// document_idle — the verdict can legitimately flip from no to yes.
+var snPageGate = (function() {
+    'use strict';
+
+    const PROBE_MS    = 1500;
+    const PROBE_LIMIT = 12;    // ~18s of looking, then stop bothering
+
+    let customDomains = [];
+    let themeHosts    = {};
+    let verdict       = false;
+    let listeners     = [];
+    let timer         = null;
+    let triesLeft     = 0;
+
+    function decide() {
+        return snHostIsKnownInstance(location.hostname, themeHosts, customDomains) ||
+               snDocumentLooksLikeServiceNow(document);
+    }
+
+    function stopProbe() {
+        if (timer) { clearInterval(timer); timer = null; }
+    }
+
+    function startProbe() {
+        if (timer || verdict) return;
+        triesLeft = PROBE_LIMIT;
+        timer = setInterval(function() {
+            if (triesLeft-- <= 0) { stopProbe(); return; }
+            reevaluate();
+        }, PROBE_MS);
+    }
+
+    function reevaluate() {
+        const next = decide();
+        if (next === verdict) return;
+        verdict = next;
+        if (verdict) stopProbe();
+        listeners.forEach(function(fn) {
+            try { fn(verdict); } catch (e) { /* a listener's problem, not ours */ }
+        });
+    }
+
+    // Answer synchronously first, so a ServiceNow page that's already recognisable
+    // doesn't flash unthemed while storage is read.
+    verdict = decide();
+
+    try {
+        chrome.storage.local.get('snCustomDomains', function(res) {
+            customDomains = (res && res.snCustomDomains) || [];
+            reevaluate();
+            startProbe();
+        });
+
+        chrome.storage.onChanged.addListener(function(changes, area) {
+            if (area !== 'local' || !changes.snCustomDomains) return;
+            customDomains = changes.snCustomDomains.newValue || [];
+            reevaluate();
+        });
+    } catch (e) { /* extension context invalidated */ }
+
+    startProbe();
+
+    return {
+        allowed: function() { return verdict; },
+
+        // The theme settings own the host → theme map. A host listed there is the
+        // user pointing at an instance, so it counts as an answer here too.
+        setThemeHosts: function(hosts) {
+            themeHosts = (hosts && typeof hosts === 'object') ? hosts : {};
+            reevaluate();
+        },
+
+        onChange: function(fn) { if (typeof fn === 'function') listeners.push(fn); }
+    };
+})();
+
+
 (function() {
     'use strict';
 
@@ -476,6 +586,8 @@
 
     function applyTheming() {
         if (!settings || !settings.enabled) { stopTheming(); return; }
+        // Not a ServiceNow instance — leave the page exactly as its author built it.
+        if (!snPageGate.allowed()) { stopTheming(); return; }
         if (isHibernating()) return;
 
         const resolved = snResolvePageTheme(settings, location.hostname);
@@ -521,6 +633,8 @@
 
     function cycle(step) {
         if (!settings || !settings.enabled) return;
+        // Alt+Shift+T on a random site must not turn it into a ServiceNow instance.
+        if (!snPageGate.allowed()) return;
 
         const current = snResolvePageTheme(settings, location.hostname).key;
         const at = SN_PAGE_THEME_ORDER.indexOf(current);
@@ -559,6 +673,7 @@
         chrome.storage.local.get(SN_PAGE_THEME_STORE, function(res) {
             try {
                 settings = snNormalisePageThemeSettings(res && res[SN_PAGE_THEME_STORE]);
+                snPageGate.setThemeHosts(settings.hosts);
                 applyTheming();
             } catch (e) { console.error('[SN Commands] theme init failed:', e); }
         });
@@ -568,8 +683,16 @@
             if (area !== 'local' || !changes[SN_PAGE_THEME_STORE]) return;
             try {
                 settings = snNormalisePageThemeSettings(changes[SN_PAGE_THEME_STORE].newValue);
+                snPageGate.setThemeHosts(settings.hosts);
                 applyTheming();
             } catch (e) { console.error('[SN Commands] theme update failed:', e); }
+        });
+
+        // A host that only became recognisable once Polaris finished booting still
+        // gets painted, without waiting for a reload.
+        snPageGate.onChange(function() {
+            try { applyTheming(); }
+            catch (e) { console.error('[SN Commands] theme re-check failed:', e); }
         });
     } catch (e) {
         console.error('[SN Commands] theme unavailable:', e);
@@ -618,7 +741,7 @@
     }
 
     function syncKeepAlive() {
-        const on = isTop && helpers && helpers.keepAlive.enabled;
+        const on = isTop && snPageGate.allowed() && helpers && helpers.keepAlive.enabled;
 
         if (!on) {
             if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null; }
@@ -635,7 +758,7 @@
     // quietly expires, so send one on the way back in.
     document.addEventListener('visibilitychange', function() {
         if (document.hidden) return;
-        if (isTop && helpers && helpers.keepAlive.enabled) ping();
+        if (isTop && snPageGate.allowed() && helpers && helpers.keepAlive.enabled) ping();
     });
 
     // ── Injected helpers ─────────────────────────────────────────────────────
@@ -677,6 +800,9 @@
     }
 
     function applyHelpers() {
+        // On a site that isn't a ServiceNow instance these have nothing to act on,
+        // so nothing is injected, no attributes are written and no pings go out.
+        if (!snPageGate.allowed()) { syncKeepAlive(); return; }
         syncAttributes();
         syncKeepAlive();
         syncInjected();
@@ -697,6 +823,13 @@
                 helpers = snNormaliseHelperSettings(changes[SN_HELPERS_STORE].newValue);
                 applyHelpers();
             } catch (e) { console.error('[SN Commands] helpers update failed:', e); }
+        });
+
+        // Same late-recognition case as the theme: a host only identified as an
+        // instance after Polaris booted still gets its helpers.
+        snPageGate.onChange(function() {
+            try { applyHelpers(); }
+            catch (e) { console.error('[SN Commands] helpers re-check failed:', e); }
         });
     } catch (e) {
         console.error('[SN Commands] helpers unavailable:', e);

@@ -10,6 +10,7 @@
      muted/dim greys were lifted so hints, placeholders and the usage meta line
      clear 4.5:1 against the surface they sit on — the old values did not. */
   :root[data-theme="dark"] {
+    color-scheme: dark;
     --bg:           #0d1117;
     --bg2:          #161b22;
     --bg3:          #0d2137;
@@ -23,11 +24,13 @@
     --accent-h:     #0055a5;
     --accent-fg:    #4da3e8;   /* accent used as text on a dark surface */
     --danger:       #f87171;
+    --danger-solid: #b91c1c;   /* filled state — white text stays at 6.5:1 */
     --toast-bg:     #1e293b;
     --toast-border: #334155;
     --toast-text:   #f1f5f9;
   }
   :root[data-theme="light"] {
+    color-scheme: light;
     --bg:           #f1f5f9;
     --bg2:          #ffffff;
     --bg3:          #dbeafe;
@@ -35,12 +38,13 @@
     --border2:      #cbd5e1;
     --text:         #0f172a;
     --text-muted:   #475569;   /* 7.4:1 on --bg2 */
-    --text-dim:     #64748b;   /* 5.3:1 on --bg2 — hints and placeholders */
+    --text-dim:     #55657a;   /* 5.9:1 on --bg2, 5.4:1 on --bg */
     --text-mono:    #1d4ed8;
     --accent:       #0070d2;
     --accent-h:     #0055a5;
     --accent-fg:    #0058a8;
-    --danger:       #dc2626;
+    --danger:       #b91c1c;   /* 6.0:1 on --bg */
+    --danger-solid: #b91c1c;   /* 6.5:1 against white */
     --toast-bg:     #1e293b;
     --toast-border: #334155;
     --toast-text:   #f1f5f9;
@@ -85,7 +89,7 @@
     cursor: pointer; outline: none; appearance: none; -webkit-appearance: none;
     transition: border-color 0.15s, color 0.15s;
     /* caret drawn inline so no extra asset is needed */
-    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 9px center;
   }
   .sort-select:hover  { border-color: var(--accent); color: var(--text); }
@@ -94,11 +98,11 @@
 
   .header-divider { width: 1px; height: 22px; background: var(--border2); margin: 0 2px; flex-shrink: 0; }
   .btn-support {
-    background: linear-gradient(135deg, #ec4899, #8b5cf6); color: #fff;
-    border: none; box-shadow: 0 2px 10px rgba(139,92,246,0.45);
+    background: linear-gradient(135deg, #db2777, #7c3aed); color: #fff;
+    border: none; box-shadow: 0 2px 10px rgba(124,58,237,0.45);
     gap: 6px;
   }
-  .btn-support:hover { box-shadow: 0 3px 14px rgba(139,92,246,0.65); transform: translateY(-1px); }
+  .btn-support:hover { box-shadow: 0 3px 14px rgba(124,58,237,0.65); transform: translateY(-1px); }
   .btn-support svg { flex-shrink: 0; }
 
   .btn {
@@ -112,7 +116,7 @@
   .btn-secondary{ background: var(--bg); color: var(--text-muted); border: 1px solid var(--border2); }
   .btn-secondary:hover{ background: var(--border); color: var(--text); }
   .btn-danger   { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
-  .btn-danger:hover   { background: var(--danger); color: #fff; }
+  .btn-danger:hover   { background: var(--danger-solid); border-color: var(--danger-solid); color: #fff; }
   .btn-icon { padding: 4px 9px; font-size: 11px; }
 
   .theme-toggle {
@@ -206,6 +210,8 @@
   .field-input:focus { border-color: var(--accent); }
   .field-input.mono { font-family: monospace; }
   .field-input.error { border-color: var(--danger); }
+  .field-input::placeholder, .find-bar-query::placeholder,
+  .find-bar-replace::placeholder { color: var(--text-dim); opacity: 1; }
 
   /* ── Script section ──────────────────────────────────────────────────────── */
   .script-section {
@@ -230,6 +236,14 @@
   .cm-container .CodeMirror.cm-s-dracula { background: var(--bg2); }
   [data-theme="light"] .cm-container .CodeMirror { background: #fff; color: #0f172a; }
   [data-theme="light"] .cm-container .CodeMirror-gutters { background: #f1f5f9; border-right: 1px solid #e2e8f0; }
+  /* Dracula's gutter greys sit below 4.5:1 on this background. */
+  :root[data-theme="dark"]  { --cm-gutter-fg: #8b9fb3; }
+  :root[data-theme="light"] { --cm-gutter-fg: #55657a; }
+  .CodeMirror-linenumber { color: var(--cm-gutter-fg) !important; }
+  .cm-s-dracula span.cm-comment { color: #8b9fb3; }
+  /* CodeMirror's default light brackets are pure green (2.6:1 on white). */
+  [data-theme="light"] .CodeMirror .CodeMirror-matchingbracket { color: #0b6b2c !important; }
+  [data-theme="light"] .CodeMirror .CodeMirror-nonmatchingbracket { color: #a22222 !important; }
 
   /* Find bar — floats over the CM */
   .find-bar {
@@ -313,7 +327,7 @@
     display: flex; align-items: center; justify-content: center;
     transition: background 0.15s, color 0.15s; line-height: 1;
   }
-  .fullscreen-close-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .fullscreen-close-btn:hover { background: var(--danger-solid); color: #fff; border-color: var(--danger-solid); }
 
   /* fullscreen CM */
   #fsCMContainer {
@@ -571,7 +585,7 @@
           <input type="checkbox" id="chkAllUrls" />
           <div>
             <div class="instances-option-title">Enable on all websites</div>
-            <div class="instances-option-desc">Simplest option. Works on any on-prem or cloud ServiceNow instance automatically, with no need to list domains. Chrome will ask you to confirm this permission.</div>
+            <div class="instances-option-desc">Simplest option. Works on any on-prem or cloud ServiceNow instance automatically, with no need to list domains. Chrome will ask you to confirm this permission. Only the <code>\</code> palette becomes available everywhere — the page theme and helpers still act on ServiceNow pages only.</div>
           </div>
         </label>
       </div>
@@ -750,7 +764,7 @@
   </div>
   <div id="fsCMContainer"></div>
   <div class="fullscreen-footer">
-    <span class="fullscreen-footer-hint">Press <kbd style="background:var(--border2);padding:1px 5px;border-radius:3px;font-size:10px;">Esc</kbd> to discard changes</span>
+    <span class="fullscreen-footer-hint">Press <kbd style="background:var(--border2);color:var(--text);padding:1px 5px;border-radius:3px;font-size:10px;">Esc</kbd> to discard changes</span>
     <button class="btn btn-secondary" id="btnFullscreenFind">🔍 Find</button>
     <button class="btn btn-secondary" id="btnFullscreenFormat">✦ Format</button>
     <button class="btn btn-secondary" id="btnFullscreenClose">✕ Discard &amp; Close</button>

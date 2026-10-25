@@ -251,6 +251,11 @@ function luminance(hex) {
   return 0.2126 * lin(h.slice(0, 2)) + 0.7152 * lin(h.slice(2, 4)) + 0.0722 * lin(h.slice(4, 6));
 }
 function whiteContrast(hex) { return 1.05 / (luminance(hex) + 0.05); }
+function contrast(a, b) {
+  const x = luminance(a), y = luminance(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+function isHex(value) { return /^#[0-9a-f]{6}$/i.test(value || ''); }
 function deltaE(a, b) {
   const x = toLab(a), y = toLab(b);
   return Math.sqrt((x.L - y.L) ** 2 + (x.a - y.a) ** 2 + (x.b - y.b) ** 2);
@@ -269,6 +274,10 @@ BUILDS.forEach(build => {
       globalThis.__norm = snNormalisePageThemeSettings;
       globalThis.__base = snPageThemeBaseCss;
       globalThis.__head = snPageThemeHeaderCss;
+      globalThis.__cloud = snIsServiceNowCloudHost;
+      globalThis.__known = snHostIsKnownInstance;
+      globalThis.__looks = snDocumentLooksLikeServiceNow;
+      globalThis.__markers = SN_SERVICENOW_DOM_MARKERS;
     `, { filename: `${build}/themes.js` }).runInContext(ctx);
     palettes = ctx.__p; order = ctx.__o; dflt = ctx.__d;
     check(true, `${build}/themes.js evaluates`);
@@ -297,6 +306,43 @@ BUILDS.forEach(build => {
           `${build}: unmapped host falls back to the default`);
     check(ctx.__clean('https://acme.service-now.com:443/nav_to.do') === 'acme.service-now.com',
           `${build}: hostnames are normalised`);
+
+    // Is-this-ServiceNow gate. Getting this wrong in the permissive direction means
+    // the page theme repaints unrelated websites, which is how a GitHub code view
+    // ended up rendered as two overlapping copies of itself.
+    check(ctx.__cloud('acme.service-now.com') === true,
+          `${build}: cloud instances are recognised`);
+    check(ctx.__cloud('acme.servicenowservices.com') === true,
+          `${build}: government cloud instances are recognised`);
+    check(ctx.__cloud('github.com') === false,
+          `${build}: an unrelated host is not a cloud instance`);
+    check(ctx.__cloud('not-service-now.com.evil.example') === false,
+          `${build}: a lookalike host is not a cloud instance`);
+
+    check(ctx.__known('snow.internal.corp', {}, ['*://snow.internal.corp/*']) === true,
+          `${build}: a domain added under Instances counts as an instance`);
+    check(ctx.__known('snow.internal.corp', { 'snow.internal.corp': 'sage-moss' }, []) === true,
+          `${build}: a host mapped to a theme counts as an instance`);
+    check(ctx.__known('app.internal.corp', {}, ['*://*.internal.corp/*']) === true,
+          `${build}: a wildcard instance pattern covers its subdomains`);
+    check(ctx.__known('github.com', { 'snow.internal.corp': 'sage-moss' },
+                      ['*://snow.internal.corp/*']) === false,
+          `${build}: an unconfigured host is not an instance`);
+    check(ctx.__known('github.com', undefined, undefined) === false,
+          `${build}: missing configuration does not make a host an instance`);
+
+    // Markers have to be specific enough that no ordinary website trips them.
+    check(ctx.__looks(null) === false, `${build}: no document means no markers`);
+    check(ctx.__looks({ querySelector: () => null }) === false,
+          `${build}: a document without markers is not ServiceNow`);
+    check(ctx.__looks({ querySelector: (s) => s === 'input[name="sysparm_ck"]' ? {} : null }) === true,
+          `${build}: a ServiceNow marker is recognised`);
+    check(Array.isArray(ctx.__markers) && ctx.__markers.length > 0,
+          `${build}: ServiceNow DOM markers are declared`);
+    ['div', 'body', 'form', 'table', 'textarea', 'input', '*'].forEach(generic =>
+      check(!ctx.__markers.includes(generic),
+            `${build}: "${generic}" is not used as a ServiceNow marker`,
+            'a marker this generic would match every website'));
 
     // Defaults must be off, so installing a command palette never restyles anyone.
     check(ctx.__norm(undefined).enabled === false,
@@ -351,7 +397,7 @@ BUILDS.forEach(build => {
   ['content.js', 'settings.js'].forEach(file => {
     const used = new Set(
       [...read(build, file).matchAll(
-        /\b(SN_(?:PAGE_|HELPER|KEEPALIVE|REOPEN|QUICK)[A-Z_]*|sn(?:Default|Normalise|Clean|Resolve|Apply|Hex|Clamp)[A-Za-z]\w*)\b/g
+        /\b(SN_(?:PAGE_|HELPER|KEEPALIVE|REOPEN|QUICK|SERVICENOW)[A-Z_]*|sn(?:Default|Normalise|Clean|Resolve|Apply|Hex|Clamp|Host|Document|Is)[A-Za-z]\w*)\b/g
       )].map(m => m[1])
     );
     used.forEach(name =>
@@ -469,6 +515,160 @@ BUILDS.forEach(build => {
   const content = read(build, 'content.js');
   Object.keys(ctx.__attr).forEach(key =>
     check(content.includes('SN_HELPER_ATTR'), `${build}: content.js mirrors helper toggles to the DOM`));
+});
+
+// ── 12. Theme tokens ──────────────────────────────────────────────────────────
+// A missing or washed-out token only shows up as unreadable text in one theme,
+// on one control. Check every token pair that is actually used as text, plus the
+// explicit colours that fixed the dark-mode editor bug.
+const REQUIRED_TOKENS = ['bg', 'bg2', 'bg3', 'border', 'border2', 'text', 'text-muted',
+                         'text-dim', 'text-mono', 'accent', 'accent-h', 'accent-fg',
+                         'danger', 'danger-solid'];
+const TEXT_ON_SURFACES = ['text', 'text-muted', 'text-dim', 'text-mono', 'accent-fg', 'danger'];
+
+function parseThemeTokens(html, theme) {
+  const re = new RegExp(':root\\[data-theme="' + theme + '"\\]\\s*\\{([\\s\\S]*?)\\}', 'g');
+  const tokens = {};
+  let block;
+  while ((block = re.exec(html)) !== null) {
+    const css = block[1].replace(/\/\*[\s\S]*?\*\//g, '');
+    css.split(';').forEach(decl => {
+      const at = decl.indexOf(':');
+      if (at === -1) return;
+      const prop = decl.slice(0, at).trim();
+      const value = decl.slice(at + 1).trim();
+      if (prop.startsWith('--')) tokens[prop.slice(2)] = value;
+      else if (prop === 'color-scheme') tokens[prop] = value;
+    });
+  }
+  return tokens;
+}
+
+function objectBody(src, marker) {
+  const at = src.indexOf(marker);
+  if (at === -1) return null;
+  const open = src.indexOf('{', at + marker.length);
+  if (open === -1) return null;
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) return src.slice(open + 1, i);
+  }
+  return null;
+}
+
+function objectProps(body) {
+  const out = {};
+  [...String(body || '').matchAll(/(\w+):\s*'([^']+)'/g)].forEach(m => { out[m[1]] = m[2]; });
+  return out;
+}
+
+BUILDS.forEach(build => {
+  ['popup.html', 'settings.html'].forEach(page => {
+    const html = read(build, page);
+    const themes = { dark: parseThemeTokens(html, 'dark'), light: parseThemeTokens(html, 'light') };
+
+    Object.keys(themes).forEach(theme => {
+      const t = themes[theme];
+      check(t['color-scheme'] === theme,
+            `${build}/${page} ${theme}: color-scheme is ${theme}`, t['color-scheme']);
+      REQUIRED_TOKENS.forEach(name =>
+        check(isHex(t[name]), `${build}/${page} ${theme}: --${name} is a hex colour`, t[name]));
+
+      TEXT_ON_SURFACES.forEach(fg => ['bg', 'bg2', 'bg3'].forEach(bg => {
+        if (!isHex(t[fg]) || !isHex(t[bg])) return;
+        const c = contrast(t[fg], t[bg]);
+        check(c >= 4.5, `${build}/${page} ${theme}: --${fg} on --${bg} clears 4.5:1`,
+              c.toFixed(2) + ':1');
+      }));
+
+      ['accent', 'accent-h', 'danger-solid'].forEach(bg => {
+        if (!isHex(t[bg])) return;
+        const c = whiteContrast(t[bg]);
+        check(c >= 4.5, `${build}/${page} ${theme}: white on --${bg} clears 4.5:1`,
+              c.toFixed(2) + ':1');
+      });
+    });
+
+    // Placeholders sit on --bg2 and must not fall back to the UA grey.
+    check(/::placeholder[^{]*\{[^}]*color:\s*var\(--text-dim\)/.test(html),
+          `${build}/${page}: placeholders use --text-dim`);
+
+    if (page === 'popup.html') {
+      const area = /\.script-area\s*\{([^}]*)\}/.exec(html);
+      check(!!area && /(^|[;\s])color:\s*var\(--text\)/.test(area[1]),
+            `${build}/${page}: .script-area sets an explicit text colour`,
+            'without it Chrome and Firefox paint UA black on the dark surface');
+      check(!!area && /caret-color:\s*var\(--text\)/.test(area[1]),
+            `${build}/${page}: .script-area sets the caret colour`);
+
+      const fsArea = /\.fullscreen-textarea\s*\{([^}]*)\}/.exec(html);
+      check(!!fsArea && /(^|[;\s])color:\s*var\(--text\)/.test(fsArea[1]),
+            `${build}/${page}: .fullscreen-textarea sets an explicit text colour`);
+    }
+  });
+
+  // CodeMirror: gutters, comments and (light-theme) matching brackets.
+  const settings = read(build, 'settings.html');
+  const dark  = parseThemeTokens(settings, 'dark');
+  const light = parseThemeTokens(settings, 'light');
+  [['dark', dark, dark.bg2], ['light', light, light.bg2]].forEach(([theme, t, surface]) => {
+    if (!isHex(t['cm-gutter-fg']) || !isHex(surface)) return;
+    const c = contrast(t['cm-gutter-fg'], surface);
+    check(c >= 4.5, `${build}: ${theme} CodeMirror line numbers clear 4.5:1`, c.toFixed(2) + ':1');
+  });
+  const comment = /\.cm-s-dracula span\.cm-comment\s*\{\s*color:\s*(#[0-9a-f]{6})/i.exec(settings);
+  check(!!comment && isHex(dark.bg2) && contrast(comment[1], dark.bg2) >= 4.5,
+        `${build}: dark CodeMirror comments clear 4.5:1`,
+        comment ? contrast(comment[1], dark.bg2).toFixed(2) + ':1' : 'rule missing');
+  const bracket = /\[data-theme="light"\][^{]*\.CodeMirror-matchingbracket\s*\{\s*color:\s*(#[0-9a-f]{6})/i.exec(settings);
+  check(!!bracket && isHex(light.bg2) && contrast(bracket[1], light.bg2) >= 4.5,
+        `${build}: light CodeMirror matching brackets clear 4.5:1`,
+        bracket ? contrast(bracket[1], light.bg2).toFixed(2) + ':1' : 'override missing');
+  const nonBracket = /\[data-theme="light"\][^{]*\.CodeMirror-nonmatchingbracket\s*\{\s*color:\s*(#[0-9a-f]{6})/i.exec(settings);
+  check(!!nonBracket && isHex(light.bg2) && contrast(nonBracket[1], light.bg2) >= 4.5,
+        `${build}: light CodeMirror non-matching brackets clear 4.5:1`);
+
+  // Support button: white label on a two-stop gradient, so both stops must pass.
+  const support = /\.btn-support\s*\{([^}]*)\}/.exec(settings);
+  const gradient = support && /linear-gradient\(([^)]*)\)/.exec(support[1]);
+  const stops = gradient ? [...gradient[1].matchAll(/#[0-9a-f]{6}/gi)].map(m => m[0]) : [];
+  check(stops.length >= 2, `${build}: support button uses a gradient`, 'gradient not found');
+  stops.forEach(hex => {
+    const c = whiteContrast(hex);
+    check(c >= 4.5, `${build}: white support text on ${hex} clears 4.5:1`, c.toFixed(2) + ':1');
+  });
+
+  // The in-page palette builds its colours in content.js, where CSS variables
+  // aren't available. Parse its theme literals and check the same pairs.
+  const content = read(build, 'content.js');
+  const palettesBody = objectBody(content, 'const THEMES =');
+  const paletteThemes = palettesBody ? {
+    dark:  objectProps(objectBody(palettesBody, 'dark:')),
+    light: objectProps(objectBody(palettesBody, 'light:'))
+  } : null;
+  check(!!paletteThemes, `${build}: content.js palette themes are readable`);
+  if (paletteThemes) {
+    Object.keys(paletteThemes).forEach(theme => {
+      const t = paletteThemes[theme];
+      ['bg', 'bg2', 'bg3', 'border', 'border2', 'text', 'textMuted', 'textDim', 'textMono', 'accent']
+        .forEach(name => check(isHex(t[name]), `${build}: palette ${theme}.${name} is a hex colour`, t[name]));
+
+      [['text', 'bg2'], ['text', 'bg3'], ['textMuted', 'bg'], ['textMuted', 'bg3'],
+       ['textDim', 'bg'], ['textDim', 'bg2'], ['textMono', 'bg'], ['textMono', 'bg3'],
+       ['text', 'border2']].forEach(([fg, bg]) => {
+        if (!isHex(t[fg]) || !isHex(t[bg])) return;
+        const c = contrast(t[fg], t[bg]);
+        check(c >= 4.5, `${build}: palette ${theme} ${fg} on ${bg} clears 4.5:1`, c.toFixed(2) + ':1');
+      });
+      if (isHex(t.accent)) {
+        const c = whiteContrast(t.accent);
+        check(c >= 4.5, `${build}: palette ${theme} white on accent clears 4.5:1`, c.toFixed(2) + ':1');
+      }
+    });
+  }
+  check(/paletteCss/.test(content) && /::placeholder/.test(content) && /caret-color/.test(content),
+        `${build}: palette styles its placeholder and caret`);
 });
 
 // ── Report ────────────────────────────────────────────────────────────────────

@@ -281,4 +281,4 @@ Questions, bug reports and feature requests are welcome at
 
 ## License
 
-GNU General Public License v3.0 — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
