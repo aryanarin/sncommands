@@ -219,7 +219,7 @@
     <tr><th>Helper</th><th>What it does on the network</th></tr>
     <tr>
       <td><strong>Keep my session alive</strong></td>
-      <td>While a ServiceNow tab is open, requests a small endpoint on <em>that same instance</em> (for example <code>/stats.do</code>) on the interval you choose, so your session doesn't expire while you read. It sends only the session cookie your browser would already send, reads nothing from the page, and stores nothing about the response. No request goes anywhere except the instance you are already signed in to.</td>
+      <td>While a ServiceNow tab is open, requests a small built-in UI page on <em>that same instance</em> (a classic list page loaded with a query that returns no records, falling back to <code>/stats.do</code>) on the interval you choose, so your session doesn't expire while you read. ServiceNow only extends a session for UI-level requests like this, not API calls. Only the response's status line is used; the body is discarded. It sends only the session cookie your browser would already send, reads nothing from the page, and stores nothing about the response. No request goes anywhere except the instance you are already signed in to.</td>
     </tr>
     <tr>
       <td><strong>Show reopen count on incidents</strong></td>

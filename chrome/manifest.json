@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SN Commands",
-  "version": "4.8.2",
+  "version": "4.8.3",
   "description": "Custom backslash (\\) commands for ServiceNow — run editable scripts instantly from a command palette, on cloud or on-prem instances.",
   "homepage_url": "https://github.com/aryanarin/sncommands",
   "icons": {

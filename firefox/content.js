@@ -714,10 +714,13 @@ var snPageGate = (function() {
     let isTop = true;
     try { isTop = (window.top === window); } catch (e) { isTop = false; }
 
-    let helpers        = null;
-    let keepAliveTimer = null;
-    let endpointIdx    = 0;
-    const injected     = { reopenCount: false, quickPost: false };
+    let helpers          = null;
+    let keepAliveTimer   = null;
+    let keepAliveActive  = false;
+    let keepAlivePinging = false;
+    let keepAliveLastPing = 0;
+    let endpointIdx      = 0;
+    const injected       = { reopenCount: false, quickPost: false };
 
     // ── Keep-alive ───────────────────────────────────────────────────────────
     // Top frame only. ServiceNow's classic UI nests a form iframe, and running
@@ -726,40 +729,100 @@ var snPageGate = (function() {
     // Stays in the content script rather than moving to the background worker: a
     // service worker is torn down after ~30s idle, which a minutes-long interval
     // would not survive. A content script's timer lives as long as the tab.
+    //
+    // The request must be one the UI itself would make. ServiceNow's REST
+    // endpoints answer 200 without pushing the session timeout back; only
+    // UI-level page loads count as activity, so SN_KEEPALIVE_ENDPOINTS lists
+    // classic UI pages rather than API routes.
+    function keepAliveUrl(endpoint) {
+        return endpoint + (endpoint.indexOf('?') === -1 ? '?' : '&') +
+               'sysparm_cache=' + Date.now();
+    }
+
     function ping() {
+        if (keepAlivePinging) return;   // never run two checks at once
+        keepAlivePinging = true;
+        keepAliveLastPing = Date.now();
+
         const endpoint = SN_KEEPALIVE_ENDPOINTS[endpointIdx];
-        fetch(endpoint, { method: 'GET', credentials: 'include', cache: 'no-store' })
-            .then(function(res) {
-                if (res.ok) return;
-                // Not every instance exposes every endpoint — rotate and retry
-                // with the next one on the following tick.
-                endpointIdx = (endpointIdx + 1) % SN_KEEPALIVE_ENDPOINTS.length;
-            })
-            .catch(function() {
-                endpointIdx = (endpointIdx + 1) % SN_KEEPALIVE_ENDPOINTS.length;
-            });
+        const ctrl  = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const timer = setTimeout(function() { if (ctrl) ctrl.abort(); }, SN_KEEPALIVE_TIMEOUT_MS);
+        let settled = false;
+
+        function settle(ok) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            keepAlivePinging = false;
+            // Not every instance exposes every UI page — rotate and retry with
+            // the next one on the following tick.
+            if (!ok) endpointIdx = (endpointIdx + 1) % SN_KEEPALIVE_ENDPOINTS.length;
+        }
+
+        try {
+            fetch(keepAliveUrl(endpoint), {
+                method: 'GET',
+                credentials: 'same-origin',
+                redirect: 'manual',
+                cache: 'no-store',
+                headers: { 'Accept': 'text/html' },
+                signal: ctrl ? ctrl.signal : undefined
+            }).then(function(res) {
+                // Only the status line matters; cancel the body download at once.
+                try { if (res.body && res.body.cancel) res.body.cancel().catch(function() {}); } catch (e) {}
+                // opaqueredirect means ServiceNow sent us to a login page: the
+                // session is already gone and no ping can restore it.
+                settle(res.type !== 'opaqueredirect' && res.ok);
+            }).catch(function() { settle(false); });
+        } catch (e) {
+            settle(false);
+        }
+    }
+
+    function scheduleKeepAlive() {
+        clearTimeout(keepAliveTimer);
+        const period = snClampKeepAliveMinutes(helpers.keepAlive.minutes) * 60000;
+        // setTimeout re-armed after each tick, not setInterval: a slow request
+        // must not overlap the next one, and background tabs throttle long-lived
+        // intervals unpredictably.
+        keepAliveTimer = setTimeout(function() {
+            keepAliveTimer = null;
+            if (!keepAliveActive) return;
+            ping();
+            scheduleKeepAlive();
+        }, period);
     }
 
     function syncKeepAlive() {
         const on = isTop && snPageGate.allowed() && helpers && helpers.keepAlive.enabled;
+        const wasActive = keepAliveActive;
 
         if (!on) {
-            if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null; }
+            keepAliveActive = false;
+            clearTimeout(keepAliveTimer);
+            keepAliveTimer = null;
             return;
         }
+        keepAliveActive = true;
         // Re-arm from scratch so an interval change takes effect straight away.
-        if (keepAliveTimer) clearInterval(keepAliveTimer);
-        const period = snClampKeepAliveMinutes(helpers.keepAlive.minutes) * 60000;
-        keepAliveTimer = setInterval(ping, period);
-        ping();
+        scheduleKeepAlive();
+        if (!wasActive) ping();
     }
 
-    // A tab that's been in the background for a while is exactly where a session
-    // quietly expires, so send one on the way back in.
+    // A tab that's been in the background — or just out of focus — is exactly
+    // where a session quietly expires, so send one on the way back in. The 15s
+    // guard stops focus and visibilitychange pinging twice together.
+    function pokeKeepAlive() {
+        if (!isTop || !snPageGate.allowed()) return;
+        if (!helpers || !helpers.keepAlive.enabled) return;
+        if (keepAlivePinging || Date.now() - keepAliveLastPing < 15000) return;
+        ping();
+        scheduleKeepAlive();
+    }
     document.addEventListener('visibilitychange', function() {
-        if (document.hidden) return;
-        if (isTop && snPageGate.allowed() && helpers && helpers.keepAlive.enabled) ping();
+        if (!document.hidden) pokeKeepAlive();
     });
+    window.addEventListener('focus', pokeKeepAlive);
 
     // ── Injected helpers ─────────────────────────────────────────────────────
     // These run in every frame, not just the top one: in classic UI the form,

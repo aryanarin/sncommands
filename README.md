@@ -161,7 +161,7 @@ tabs immediately, no reload.
 
 | Helper | What it does |
 | --- | --- |
-| **Keep my session alive** | Pings a lightweight endpoint on your instance every *N* minutes (1–60, default 2) so you don't get logged out mid-ticket. Also pings once when you return to a tab that's been in the background, which is exactly where sessions quietly expire. |
+| **Keep my session alive** | Requests a tiny built-in ServiceNow page every *N* minutes (1–60, default 2) so you don't get logged out mid-ticket. It uses a UI-level page request rather than an API call, because ServiceNow only extends a session for the kind of request its own UI makes. Also pings once when you return to a tab or focus the window, which is exactly where sessions quietly expire. |
 | **Show reopen count on incidents** | When an incident form loads, reads that incident's `reopen_count` and shows it as a native banner — green at zero, red above it. Won't repeat itself for the same record. |
 | **Ctrl+Enter posts a work note** | Saves reaching for the Post button. `Cmd+Enter` on macOS. Goes through Angular's own handler so the activity stream stays in step. |
 
@@ -169,9 +169,10 @@ tabs immediately, no reload.
 
 Worth being precise, since two of them make requests:
 
-- **Keep-alive** requests a small endpoint on *the instance in that tab* — nothing
-  else. It sends only the session cookie your browser already sends, reads nothing
-  from the page, and keeps nothing from the response.
+- **Keep-alive** requests a small built-in UI page — a classic list page with a
+  query that can never match, so it returns no records — on *the instance in that
+  tab* and nothing else. It sends only the session cookie your browser already
+  sends, reads nothing from the page, and keeps nothing from the response.
 - **Reopen count** reads two fields of one incident from your instance's own Table
   API using your existing session.
 - **Ctrl+Enter** makes no requests at all; it clicks a button already on the page.

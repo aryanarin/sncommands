@@ -4,8 +4,8 @@
 // Three small always-on conveniences, each independently switchable and each off
 // until the user turns it on:
 //
-//   keepAlive    Pings a lightweight endpoint on a timer so the session doesn't
-//                time out while you're reading a long ticket.
+//   keepAlive    Loads a tiny ServiceNow UI page on a timer so the session
+//                doesn't time out while you're reading a long ticket.
 //   reopenCount  On an incident form, reports reopen_count as a native banner —
 //                green when it's zero, red when it isn't.
 //   quickPost    Ctrl+Enter posts the work note you're typing.
@@ -28,10 +28,17 @@ var SN_KEEPALIVE_DEFAULT_MINUTES = 2;
 var SN_KEEPALIVE_MIN_MINUTES     = 1;
 var SN_KEEPALIVE_MAX_MINUTES     = 60;
 
-// Tried in order; on a non-OK response or a network error the next one is used
-// for the following ping. Instances differ in what they expose, so there's no
-// single endpoint that's safe to rely on.
-var SN_KEEPALIVE_ENDPOINTS = ['/api/now/session', '/now/nav/header', '/stats.do'];
+// ServiceNow only pushes the session timeout back for requests its own UI makes;
+// REST endpoints can answer 200 while the session still expires. So these are
+// classic UI pages, not API routes. Tried in order; on a non-OK response or a
+// network error the next one is used for the following ping. Instances differ in
+// what they expose, so there's no single page that's safe to rely on.
+var SN_KEEPALIVE_ENDPOINTS = [
+    '/incident_list.do?sysparm_query=sys_id%3D-1&sysparm_limit=1',
+    '/stats.do',
+    '/now/nav/header'
+];
+var SN_KEEPALIVE_TIMEOUT_MS = 20000;
 
 // Injected MAIN-world scripts can't read chrome.storage, so the content script
 // mirrors each toggle onto <html> as an attribute. The scripts check it before
@@ -47,8 +54,9 @@ var SN_HELPER_META = [
     {
         key:   'keepAlive',
         title: 'Keep my session alive',
-        desc:  'Quietly pings your instance on a timer so you don\u2019t get logged out mid-ticket. ' +
-               'Uses a lightweight endpoint and reads nothing from the page.'
+        desc:  'Quietly requests a tiny built-in ServiceNow page on a timer \u2014 the kind of ' +
+               'UI request that actually resets the session timer \u2014 so you don\u2019t get logged ' +
+               'out mid-ticket. Reads nothing from the page.'
     },
     {
         key:   'reopenCount',

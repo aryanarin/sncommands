@@ -479,10 +479,14 @@ BUILDS.forEach(build => {
 
   check(Array.isArray(ctx.__endpoints) && ctx.__endpoints.length > 0,
         `${build}: keep-alive has at least one endpoint`);
-  ctx.__endpoints.forEach(ep =>
+  ctx.__endpoints.forEach(ep => {
     check(ep.startsWith('/') && !/^https?:/i.test(ep),
           `${build}: keep-alive endpoint "${ep}" is instance-relative`,
-          'an absolute URL would pin this to one instance'));
+          'an absolute URL would pin this to one instance');
+    check(!/^\/api\//i.test(ep),
+          `${build}: keep-alive endpoint "${ep}" is a UI page, not a REST route`,
+          'ServiceNow answers REST calls with 200 without extending the session');
+  });
 
   // Every meta entry must correspond to a real setting, or the settings page
   // renders a toggle that writes nowhere.

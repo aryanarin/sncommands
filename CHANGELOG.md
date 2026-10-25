@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented here.
 
+## [4.8.3]
+### Fixed
+- **Keep-alive could report success without actually keeping the session
+  alive.** It pinged a rotating list of endpoints that began with the REST route
+  `/api/now/session`, and stopped rotating as soon as one answered 200.
+  ServiceNow returns 200 from REST calls without pushing the session timeout
+  back, so the helper looked healthy while the session still expired. It now
+  requests a tiny classic UI page — `/incident_list.do` with a query that can
+  never match, then `/stats.do`, then `/now/nav/header` — because only
+  UI-level page loads count as activity for ServiceNow's session timer. The
+  next page is tried only when the request actually fails.
+
+### Improved
+- Keep-alive pings no longer overlap, time out after 20 seconds, treat a
+  redirect to the login page as a failure, cancel the response body once the
+  status is known, and cache-bust every request. The timer is re-armed after
+  each tick instead of using `setInterval`, so a slow request cannot stack up
+  behind the next one, and a ping now also fires when a tab regains focus, not
+  just when it becomes visible again.
+
+### Notes
+- No settings change: the helper is still off by default and still honours the
+  configured 1–60 minute interval.
+
 ## [4.8.2]
 ### Fixed
 - **Script text was invisible in dark mode, in both Chrome and Firefox.** The
