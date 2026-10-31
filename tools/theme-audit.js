@@ -35,8 +35,14 @@ const SCENARIOS = [
   { id: 'popup-dark-fullscreen',  page: 'popup',    theme: 'dark',  setup: 'popup-fullscreen', viewport: [780, 520] },
   { id: 'popup-light-fullscreen', page: 'popup',    theme: 'light', setup: 'popup-fullscreen', viewport: [780, 520] },
   { id: 'popup-dark-search-empty',page: 'popup',    theme: 'dark',  setup: 'search-empty',     viewport: [780, 520] },
+  { id: 'popup-dark-pin',         page: 'popup',    theme: 'dark',  setup: 'popup-pin',        viewport: [780, 520] },
   { id: 'palette-dark',           page: 'palette',  theme: 'dark',  setup: 'palette',          viewport: [900, 600], scope: '#sn-cmd-palette' },
   { id: 'palette-light',          page: 'palette',  theme: 'light', setup: 'palette',          viewport: [900, 600], scope: '#sn-cmd-palette' },
+  { id: 'dock-dark',              page: 'dock',     theme: 'dark',  setup: 'dock',             viewport: [900, 600], scope: '#sn-pinned-dock' },
+  { id: 'dock-light',             page: 'dock',     theme: 'light', setup: 'dock',             viewport: [900, 600], scope: '#sn-pinned-dock' },
+  { id: 'dock-dark-dragged',      page: 'dock',     theme: 'dark',  setup: 'dock-drag',        viewport: [900, 600], scope: '#sn-pinned-dock' },
+  { id: 'dock-dark-live',         page: 'dock',     theme: 'dark',  setup: 'dock-live',        viewport: [900, 600], scope: '#sn-pinned-dock' },
+  { id: 'dock-dark-frameset',     page: 'dock-frameset', theme: 'dark', setup: 'dock',          viewport: [900, 600], scope: '#sn-pinned-dock' },
   { id: 'settings-dark-editor',   page: 'settings', theme: 'dark',  setup: 'settings-editor',  viewport: [1280, 800] },
   { id: 'settings-light-editor',  page: 'settings', theme: 'light', setup: 'settings-editor',  viewport: [1280, 800] },
   { id: 'settings-dark-bulk',     page: 'settings', theme: 'dark',  setup: 'settings-bulk',    viewport: [1280, 800] },
@@ -122,6 +128,7 @@ const MOCK_DATA_JS = String.raw`
       script: scripts[i % scripts.length],
       order: i * 10,
       uses: i * 3,
+      pinned: i < 3,
       createdAt: now - (rows.length - i) * 86400000,
       updatedAt: now - i * 3600000
     };
@@ -164,6 +171,18 @@ const MOCK_DATA_JS = String.raw`
     return out;
   }
 
+  // Like the real API, every write notifies listeners. Pinning/unpinning a
+  // command relies on this to update an already-open ServiceNow tab.
+  var changeListeners = [];
+  function emitChanges(changes) {
+    if (!Object.keys(changes).length) return;
+    setTimeout(function () {
+      changeListeners.slice().forEach(function (fn) {
+        try { fn(changes, 'local'); } catch (e) { /* a listener's problem */ }
+      });
+    }, 0);
+  }
+
   var area = {
     get: function (keys, cb) {
       var out = read(keys);
@@ -171,17 +190,32 @@ const MOCK_DATA_JS = String.raw`
       return Promise.resolve(out);
     },
     set: function (obj, cb) {
-      Object.keys(obj || {}).forEach(function (k) { store[k] = obj[k]; });
+      var changes = {};
+      Object.keys(obj || {}).forEach(function (k) {
+        changes[k] = { oldValue: store[k], newValue: obj[k] };
+        store[k] = obj[k];
+      });
+      emitChanges(changes);
       if (typeof cb === 'function') { setTimeout(cb, 0); return; }
       return Promise.resolve();
     },
     remove: function (keys, cb) {
-      (Array.isArray(keys) ? keys : [keys]).forEach(function (k) { delete store[k]; });
+      var changes = {};
+      (Array.isArray(keys) ? keys : [keys]).forEach(function (k) {
+        changes[k] = { oldValue: store[k], newValue: undefined };
+        delete store[k];
+      });
+      emitChanges(changes);
       if (typeof cb === 'function') { setTimeout(cb, 0); return; }
       return Promise.resolve();
     },
     clear: function (cb) {
+      var changes = {};
+      Object.keys(store).forEach(function (k) {
+        changes[k] = { oldValue: store[k], newValue: undefined };
+      });
       store = {};
+      emitChanges(changes);
       if (typeof cb === 'function') { setTimeout(cb, 0); return; }
       return Promise.resolve();
     }
@@ -194,7 +228,13 @@ const MOCK_DATA_JS = String.raw`
   chromeApi.storage = {
     local: area,
     session: area,
-    onChanged: { addListener: function () {}, removeListener: function () {} }
+    onChanged: {
+      addListener: function (fn) { if (typeof fn === 'function') changeListeners.push(fn); },
+      removeListener: function (fn) {
+        var i = changeListeners.indexOf(fn);
+        if (i !== -1) changeListeners.splice(i, 1);
+      }
+    }
   };
   chromeApi.runtime = {
     id: 'sncommands-audit',
@@ -268,7 +308,8 @@ const AUDIT_JS = String.raw`
     // scenario now carries the setup name (editor, settings-bulk, …), not the
     // picture id, so each case is matched exactly.
     var popupSetup = scenario === 'empty' || scenario === 'editor' ||
-                     scenario === 'popup-fullscreen' || scenario === 'search-empty';
+                     scenario === 'popup-fullscreen' || scenario === 'search-empty' ||
+                     scenario === 'popup-pin';
 
     if (popupSetup) {
       await until(function () {
@@ -290,10 +331,37 @@ const AUDIT_JS = String.raw`
         search.dispatchEvent(new Event('input', { bubbles: true }));
         await until(function () { return document.querySelector('.empty-list'); }, 3000, 'empty search');
       }
+      if (scenario === 'popup-pin') {
+        var pin = await until(function () {
+          return document.querySelector('.cmd-item .cmd-pin');
+        }, 5000, 'pin button');
+        var before = pin.getAttribute('aria-pressed');
+        pin.click();
+        await until(function () {
+          var el = document.querySelector('.cmd-item .cmd-pin');
+          return el && el.getAttribute('aria-pressed') !== before;
+        }, 3000, 'pin state to toggle');
+
+        var pinStore = await new Promise(function (resolve) {
+          chrome.storage.local.get('snCommands', resolve);
+        });
+        var pinnedCount = (pinStore.snCommands || []).filter(function (c) {
+          return c.pinned === true;
+        }).length;
+        if (pinnedCount !== 2) {
+          throw new Error('pin toggle did not persist (pinned=' + pinnedCount + ')');
+        }
+        if (document.getElementById('fieldScript')) {
+          throw new Error('clicking the pin button also selected the command');
+        }
+      }
     }
 
     if (scenario === 'palette') {
       await sleep(200);
+      if (document.getElementById('sn-pinned-dock')) {
+        throw new Error('pinned dock was built on a page that is not ServiceNow');
+      }
       document.dispatchEvent(new KeyboardEvent('keydown', {
         key: '\\', bubbles: true, cancelable: true
       }));
@@ -301,6 +369,96 @@ const AUDIT_JS = String.raw`
         var el = document.getElementById('sn-cmd-palette');
         return el && getComputedStyle(el).display !== 'none';
       }, 5000, 'palette');
+    }
+
+    if (scenario === 'dock' || scenario === 'dock-drag' || scenario === 'dock-live') {
+      var dock = await until(function () {
+        var el = document.getElementById('sn-pinned-dock');
+        return el && getComputedStyle(el).display !== 'none' &&
+               el.querySelectorAll('.sn-pin-cmd').length >= 3 ? el : null;
+      }, 5000, 'pinned dock');
+
+      var rect = dock.getBoundingClientRect();
+      if (Math.abs(rect.left - 8) > 1) {
+        throw new Error('dock did not start at the left edge (left=' + rect.left + ')');
+      }
+      var centreDelta = Math.abs((rect.top + rect.height / 2) - window.innerHeight / 2);
+      if (centreDelta > 2) {
+        throw new Error('dock did not start vertically centred (delta=' + centreDelta + 'px)');
+      }
+
+      if (scenario === 'dock-live') {
+        var got = await new Promise(function (resolve) {
+          chrome.storage.local.get('snCommands', resolve);
+        });
+        var cmds = got.snCommands;
+
+        cmds[0].pinned = false;
+        await new Promise(function (resolve) {
+          chrome.storage.local.set({ snCommands: cmds }, resolve);
+        });
+        await until(function () {
+          return document.querySelectorAll('#sn-pinned-dock .sn-pin-cmd').length === 2;
+        }, 3000, 'dock to drop an unpinned command');
+
+        cmds[1].pinned = false;
+        cmds[2].pinned = false;
+        await new Promise(function (resolve) {
+          chrome.storage.local.set({ snCommands: cmds }, resolve);
+        });
+        await until(function () {
+          var el = document.getElementById('sn-pinned-dock');
+          return el && getComputedStyle(el).display === 'none';
+        }, 3000, 'dock to hide with nothing pinned');
+
+        cmds[0].pinned = true;
+        await new Promise(function (resolve) {
+          chrome.storage.local.set({ snCommands: cmds }, resolve);
+        });
+        await until(function () {
+          var el = document.getElementById('sn-pinned-dock');
+          return el && getComputedStyle(el).display !== 'none' &&
+                 el.querySelectorAll('.sn-pin-cmd').length === 1;
+        }, 3000, 'dock to return when a command is pinned');
+      }
+
+      if (scenario === 'dock-drag') {
+        var head = dock.querySelector('.sn-pin-head');
+        if (!head) throw new Error('dock has no drag handle');
+        function pointer(type, x, y, buttons) {
+          head.dispatchEvent(new PointerEvent(type, {
+            bubbles: true, cancelable: true, pointerId: 7, pointerType: 'mouse',
+            isPrimary: true, button: 0, buttons: buttons, clientX: x, clientY: y
+          }));
+        }
+        var sx = rect.left + 20, sy = rect.top + 12;
+        pointer('pointerdown', sx, sy, 1);
+        pointer('pointermove', sx + 300, sy + 120, 1);
+        pointer('pointerup',   sx + 300, sy + 120, 0);
+
+        var dragged = dock.getBoundingClientRect();
+        if (Math.abs(dragged.left - (rect.left + 300)) > 1 ||
+            Math.abs(dragged.top  - (rect.top + 120)) > 1) {
+          throw new Error('dragging did not move the dock (left=' + dragged.left + ', top=' + dragged.top + ')');
+        }
+
+        head.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'ArrowRight', bubbles: true, cancelable: true
+        }));
+        var keyed = dock.getBoundingClientRect();
+        if (Math.abs(keyed.left - (dragged.left + 12)) > 1) {
+          throw new Error('arrow keys did not move the dock (left=' + keyed.left + ')');
+        }
+
+        await sleep(350); // the arrow-key save is debounced
+        var saved = await new Promise(function (resolve) {
+          chrome.storage.local.get('snPinnedPos', resolve);
+        });
+        var p = saved && saved.snPinnedPos;
+        if (!p || Math.abs(p.left - keyed.left) > 1 || Math.abs(p.top - keyed.top) > 1) {
+          throw new Error('dock position was not saved (got ' + JSON.stringify(p) + ')');
+        }
+      }
     }
 
     var settingsSetup = scenario.indexOf('settings-') === 0 ||
@@ -635,12 +793,54 @@ function makeHarness() {
 <script src="__audit-run.js"></script>
 </body>
 </html>`);
+  fs.writeFileSync(path.join(dir, 'dock.audit.html'), `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Pinned dock audit</title></head>
+<body style="margin:0;padding:24px;font:14px/1.5 sans-serif;background:#ffffff;color:#111827">
+<sn-polaris-layout></sn-polaris-layout>
+<h1 style="font-size:18px">A ServiceNow instance page</h1>
+<p>The pinned commands dock is mounted by content.js when the page gate accepts the page.</p>
+<script src="__audit-mock.js"></script>
+<script src="themes.js"></script>
+<script src="helpers.js"></script>
+<script src="content.js"></script>
+<script src="__audit-run.js"></script>
+</body>
+</html>`);
+  // Classic UI's top frame has no <body> at all — it is a <frameset> document.
+  // The dock must still mount, and paint above the frames. Scripts are loaded
+  // after DOMContentLoaded to match document_idle injection: a content script
+  // never runs while the parser is still building the frameset.
+  fs.writeFileSync(path.join(dir, 'dock-frameset.audit.html'), `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><title>Classic UI frameset audit</title>
+<link rel="stylesheet" href="/styles/heisenberg/fixture.css">
+<script>
+window.addEventListener('DOMContentLoaded', function () {
+  ['__audit-mock.js', 'themes.js', 'helpers.js', 'content.js', '__audit-run.js']
+    .forEach(function (src) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.async = false;
+      document.head.appendChild(s);
+    });
+});
+</script>
+</head>
+<frameset cols="200,*">
+<frame src="about:blank">
+<frame src="about:blank">
+</frameset>
+</html>`);
 
   return {
     dir,
     url(scenario) {
       const page = scenario.page === 'settings' ? 'settings.audit.html'
                  : scenario.page === 'palette'  ? 'palette.audit.html'
+                 : scenario.page === 'dock'     ? 'dock.audit.html'
+                 : scenario.page === 'dock-frameset' ? 'dock-frameset.audit.html'
                  : 'popup.audit.html';
       const file = path.join(dir, page);
       const params = [

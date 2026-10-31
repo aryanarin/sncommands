@@ -21,6 +21,10 @@ can be configured to run on on-prem or custom-domain instances too.
 - **Editable scripts** — every command is just a small piece of JavaScript you
   write and can edit any time, with a full-screen CodeMirror editor, syntax
   highlighting, and auto-formatting.
+- **Pinned command dock** — star the commands you run most and they appear in a
+  small dock on the ServiceNow page itself, at the left edge, so they're one
+  click away without opening the palette. Drag it anywhere; the position is
+  remembered. See [Pinned command dock](#pinned-command-dock).
 - **Import / Export** — back up your command library as JSON, or share it with
   teammates. Importing merges by name (a duplicate name *replaces* the
   existing command) or can fully replace your library. A merge keeps your local
@@ -81,6 +85,30 @@ can be configured to run on on-prem or custom-domain instances too.
 
 <kbd>\\</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> and <kbd>F2</kbd>
 all open the palette.
+
+### Pinned command dock
+
+Every row in the popup and settings list has a star button. Click **☆** to pin a
+command; click **★** to unpin it.
+
+Pinned commands appear in a small **PINNED** dock on the ServiceNow page itself,
+starting at the left edge and vertically centred. Click a command in the dock to
+run it — no palette needed. The dock:
+
+- lists commands in your saved custom order (then alphabetically),
+- follows the extension's light/dark theme,
+- updates immediately when you pin, unpin or edit a command, without a reload,
+- hides completely when no commands are pinned, and
+- only appears on pages recognised as a ServiceNow instance.
+
+It works on both Next Experience / workspace pages and the classic UI — in the
+classic top frame, which is a frameset document, it mounts on `<html>` so it can
+still paint over the frames.
+
+**Moving it:** drag the dock by its **⠿ PINNED** header and drop it wherever it's
+out of the way. You can also tab to the header and use the arrow keys (hold
+<kbd>Shift</kbd> for larger steps). The position is saved in local storage and
+restored on every ServiceNow tab, including after a browser restart.
 
 ### Commands included out of the box
 
@@ -216,7 +244,7 @@ sncommands/
 │   ├── background.js      # Service worker: script execution, seeds, usage counting
 │   ├── themes.js          # Page-theme palettes + CSS builders, shared by content and settings
 │   ├── helpers.js         # Page-helper definitions + injected scripts, likewise shared
-│   ├── content.js         # Injected into ServiceNow pages: \ palette, page theme, helpers
+│   ├── content.js         # Injected into ServiceNow pages: \ palette, pinned dock, page theme, helpers
 │   ├── popup.html/.js     # Toolbar popup: quick command list + editor
 │   ├── settings.html/.js  # Full settings page: command library, import/export, Instances, Support
 │   ├── icons/             # Extension icons + UPI QR asset
@@ -254,9 +282,9 @@ consumers reference is actually exported, both files load *before* their consume
 in the manifest, in `settings.html` and in the dynamic content-script registration,
 white header text clears 4.5:1 on all five palettes, host resolution honours
 specificity, the injected helper scripts parse and guard against re-injection, every
-helper and the page theme default to **off**, keep-alive endpoints are
-instance-relative rather than absolute, and none of the generated CSS or injected
-script contains a remote URL.
+helper and the page theme default to **off**, the pinned dock's theme tokens stay
+in step with the palette, keep-alive endpoints are instance-relative rather than
+absolute, and none of the generated CSS or injected script contains a remote URL.
 
 ## Contributing
 

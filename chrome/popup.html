@@ -128,13 +128,21 @@
 
   .cmd-list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
   .cmd-item {
-    padding: 9px 12px; cursor: pointer; border-bottom: 1px solid var(--border);
-    border-left: 3px solid transparent;
+    display: flex; align-items: flex-start;
+    border-bottom: 1px solid var(--border); border-left: 3px solid transparent;
   }
   .cmd-item:hover { background: var(--bg); }
   .cmd-item.active { background: var(--bg3); border-left-color: var(--accent); }
-  .cmd-item-name { font-weight: 700; color: var(--text-mono); font-family: monospace; font-size: 12px; margin-bottom: 2px; }
+  .cmd-item-body { flex: 1; padding: 9px 4px 9px 12px; cursor: pointer; min-width: 0; }
+  .cmd-item-name { font-weight: 700; color: var(--text-mono); font-family: monospace; font-size: 12px; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cmd-item-hint { color: var(--text-dim); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cmd-pin {
+    flex-shrink: 0; background: none; border: 0; cursor: pointer;
+    padding: 8px 10px 8px 4px; font-size: 13px; line-height: 1;
+    color: var(--text-dim); transition: color 0.12s;
+  }
+  .cmd-pin:hover { color: var(--text-mono); }
+  .cmd-item.pinned .cmd-pin { color: var(--text-mono); }
   .empty-list { padding: 20px 12px; text-align: center; color: var(--text-dim); font-size: 11px; line-height: 1.6; }
 
   /* Right panel */

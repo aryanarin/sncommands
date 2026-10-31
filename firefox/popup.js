@@ -146,8 +146,11 @@ function renderList() {
 
   filtered.forEach(cmd => {
     const item = document.createElement('div');
-    item.className = 'cmd-item' + (cmd.id === activeId ? ' active' : '');
+    item.className = 'cmd-item' + (cmd.id === activeId ? ' active' : '') + (cmd.pinned ? ' pinned' : '');
     item.dataset.id = cmd.id;
+
+    const body = document.createElement('div');
+    body.className = 'cmd-item-body';
 
     const nameEl = document.createElement('div');
     nameEl.className = 'cmd-item-name';
@@ -157,8 +160,24 @@ function renderList() {
     hintEl.className = 'cmd-item-hint';
     hintEl.textContent = cmd.hint || '—';
 
-    item.appendChild(nameEl);
-    item.appendChild(hintEl);
+    body.appendChild(nameEl);
+    body.appendChild(hintEl);
+
+    const pinBtn = document.createElement('button');
+    pinBtn.type = 'button';
+    pinBtn.className = 'cmd-pin';
+    pinBtn.textContent = cmd.pinned ? '★' : '☆';
+    pinBtn.title = cmd.pinned ? 'Unpin from ServiceNow page' : 'Pin to ServiceNow page';
+    pinBtn.setAttribute('aria-pressed', cmd.pinned ? 'true' : 'false');
+    pinBtn.setAttribute('aria-label', (cmd.pinned ? 'Unpin ' : 'Pin ') + '\\' + cmd.name);
+    pinBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      cmd.pinned = !cmd.pinned;
+      save(() => renderList());
+    });
+
+    item.appendChild(body);
+    item.appendChild(pinBtn);
     item.addEventListener('click', () => selectCommand(cmd.id));
     cmdList.appendChild(item);
   });
@@ -290,7 +309,7 @@ function buildEditor(cmd) {
       if (idx !== -1) commands[idx] = { ...commands[idx], name, hint, script, updatedAt: Date.now() };
     } else {
       const newId = Date.now().toString();
-      commands.push({ id: newId, name, hint, script, createdAt: Date.now(), uses: 0 });
+      commands.push({ id: newId, name, hint, script, createdAt: Date.now(), uses: 0, pinned: false });
       activeId = newId;
     }
     save(() => {

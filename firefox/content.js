@@ -899,3 +899,411 @@ var snPageGate = (function() {
     }
 
 })();
+
+
+// ── Pinned command dock ───────────────────────────────────────────────────────
+// Commands starred in the popup or settings appear on the page itself, so the
+// ones you run all day are one click away without opening the palette. The dock
+// starts at the left edge, vertically centred, and the header can be dragged
+// (or moved with the arrow keys) anywhere on screen; the position is remembered
+// across reloads and tabs.
+//
+// Top frame only — the same rule the keep-alive follows — and only once the page
+// gate recognises the page as an instance, so a random site is never altered.
+// Own IIFE so a page that fights the dock can't affect the palette or helpers.
+(function() {
+    'use strict';
+
+    const DOCK_ID   = 'sn-pinned-dock';
+    const STYLE_ID  = 'sn-pinned-dock-style';
+    const POS_STORE = 'snPinnedPos';
+    const EDGE      = 8;
+
+    let isTop = true;
+    try { isTop = (window.top === window); } catch (e) { isTop = false; }
+
+    // Same tokens as the palette's THEMES. Kept as a separate object because the
+    // static audit parses `const THEMES =` for the palette's own colour literals.
+    const PIN_THEMES = {
+        dark: {
+            bg:        '#0d1117',
+            bg2:       '#161b22',
+            bg3:       '#0d2137',
+            border:    '#1f2937',
+            border2:   '#2d3748',
+            text:      '#e2e8f0',
+            textMuted: '#94a3b8',
+            textDim:   '#7d8b9c',
+            textMono:  '#38bdf8',
+            accent:    '#0070d2',
+        },
+        light: {
+            bg:        '#f1f5f9',
+            bg2:       '#ffffff',
+            bg3:       '#dbeafe',
+            border:    '#e2e8f0',
+            border2:   '#cbd5e1',
+            text:      '#0f172a',
+            textMuted: '#475569',
+            textDim:   '#55657a',
+            textMono:  '#1d4ed8',
+            accent:    '#0070d2',
+        }
+    };
+
+    let dock      = null;
+    let head      = null;
+    let listEl    = null;
+    let styleEl   = null;
+    let commands  = [];
+    let pos       = null;         // {left, top}; null = default left-centre
+    let theme     = 'dark';
+    let rowsKey   = '';
+    let saveTimer = null;
+    let drag      = null;
+
+    function dockCss(t) {
+        const id = '#' + DOCK_ID;
+        return id + '{position:fixed;z-index:2147483646;display:flex;flex-direction:column;' +
+            'width:200px;max-height:min(62vh,460px);background:' + t.bg + ';color:' + t.text + ';' +
+            'border:1px solid ' + t.border2 + ';border-radius:9px;overflow:hidden;' +
+            'box-shadow:0 10px 30px rgba(0,0,0,.45);color-scheme:' + theme + ';' +
+            'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}' +
+            id + ' .sn-pin-head{display:flex;align-items:center;gap:6px;padding:7px 10px;' +
+            'background:' + t.bg2 + ';border-bottom:1px solid ' + t.border + ';cursor:grab;' +
+            'touch-action:none;user-select:none;-webkit-user-select:none}' +
+            id + '.sn-pin-dragging .sn-pin-head{cursor:grabbing}' +
+            id + ' .sn-pin-head:focus-visible{outline:2px solid ' + t.accent + ';outline-offset:-2px}' +
+            id + ' .sn-pin-grip{color:' + t.textDim + ';font-size:12px;line-height:1}' +
+            id + ' .sn-pin-title{color:' + t.textMuted + ';font-size:10px;font-weight:700;' +
+            'letter-spacing:.6px;text-transform:uppercase}' +
+            id + ' .sn-pin-list{overflow-y:auto;scrollbar-width:thin;' +
+            'scrollbar-color:' + t.border2 + ' transparent}' +
+            id + ' .sn-pin-cmd{display:block;width:100%;margin:0;padding:7px 10px;' +
+            'background:transparent;border:0;border-bottom:1px solid ' + t.border + ';' +
+            'border-radius:0;box-shadow:none;text-align:left;font-family:inherit;' +
+            'cursor:pointer;appearance:none;-webkit-appearance:none}' +
+            id + ' .sn-pin-cmd:hover{background:' + t.bg3 + '}' +
+            id + ' .sn-pin-cmd:focus-visible{outline:2px solid ' + t.accent + ';outline-offset:-2px}' +
+            id + ' .sn-pin-cmd:last-child{border-bottom:0}' +
+            id + ' .sn-pin-name{display:block;color:' + t.textMono + ';font-family:monospace;' +
+            'font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;' +
+            'text-overflow:ellipsis}' +
+            id + ' .sn-pin-hint{display:block;margin-top:1px;color:' + t.textMuted + ';' +
+            'font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+    }
+
+    // A classic-UI top frame is a frameset document, where document.body IS the
+    // <frameset> element and renders only <frame> children — anything appended
+    // there never gets laid out. Mount on <html> instead; fixed positioning
+    // still paints over the frames, which is what makes classic UI usable.
+    function mountPoint() {
+        const body = document.body;
+        if (body && body.nodeName !== 'FRAMESET') return body;
+        return document.documentElement;
+    }
+
+    function build() {
+        // A workspace page can replace <body> during navigation; a detached dock
+        // is re-attached rather than rebuilt, so rows and listeners survive.
+        const root = mountPoint();
+        if (!root) return;
+        if (dock) {
+            if (!dock.isConnected) root.appendChild(dock);
+            if (styleEl && !styleEl.isConnected) {
+                (document.head || document.documentElement).appendChild(styleEl);
+            }
+            return;
+        }
+
+        styleEl = document.createElement('style');
+        styleEl.id = STYLE_ID;
+        styleEl.textContent = dockCss(PIN_THEMES[theme]);
+        (document.head || document.documentElement).appendChild(styleEl);
+
+        dock = document.createElement('div');
+        dock.id = DOCK_ID;
+        dock.setAttribute('role', 'toolbar');
+        dock.setAttribute('aria-label', 'Pinned commands');
+        dock.setAttribute('aria-orientation', 'vertical');
+
+        head = document.createElement('div');
+        head.className = 'sn-pin-head';
+        head.tabIndex = 0;
+        head.setAttribute('role', 'button');
+        head.setAttribute('aria-label', 'Move pinned commands — drag, or use the arrow keys');
+        head.title = 'Drag to move';
+
+        const grip = document.createElement('span');
+        grip.className = 'sn-pin-grip';
+        grip.setAttribute('aria-hidden', 'true');
+        grip.textContent = '⠿';
+
+        const label = document.createElement('span');
+        label.className = 'sn-pin-title';
+        label.textContent = 'Pinned';
+
+        head.appendChild(grip);
+        head.appendChild(label);
+
+        listEl = document.createElement('div');
+        listEl.className = 'sn-pin-list';
+
+        dock.appendChild(head);
+        dock.appendChild(listEl);
+        root.appendChild(dock);
+
+        head.addEventListener('pointerdown', onDragStart);
+        head.addEventListener('pointermove', onDragMove);
+        head.addEventListener('pointerup', onDragEnd);
+        head.addEventListener('pointercancel', onDragEnd);
+        head.addEventListener('keydown', onHeadKey);
+        window.addEventListener('resize', onResize);
+    }
+
+    function pinnedList() {
+        return commands.filter(function(c) { return c && c.pinned === true; })
+            .sort(function(a, b) {
+                const aHas = a.order != null && a.order !== '';
+                const bHas = b.order != null && b.order !== '';
+                if (aHas && bHas) return a.order - b.order;
+                if (aHas) return -1;
+                if (bHas) return 1;
+                return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' });
+            });
+    }
+
+    function makeRow(cmd) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sn-pin-cmd';
+        btn.title = '\\' + cmd.name + (cmd.hint ? ' — ' + cmd.hint : '') + '\nClick to run';
+        btn.setAttribute('aria-label', 'Run \\' + cmd.name + (cmd.hint ? ': ' + cmd.hint : ''));
+
+        const name = document.createElement('span');
+        name.className = 'sn-pin-name';
+        name.textContent = '\\' + cmd.name;
+        btn.appendChild(name);
+
+        if (cmd.hint) {
+            const hint = document.createElement('span');
+            hint.className = 'sn-pin-hint';
+            hint.textContent = cmd.hint;
+            btn.appendChild(hint);
+        }
+
+        // Same defence as the palette: some ServiceNow pages swallow document
+        // clicks, so mousedown (capture phase) runs the command first and click
+        // remains as the keyboard/normal-page fallback.
+        let firedByMouseDown = false;
+        btn.addEventListener('mousedown', function(e) {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            firedByMouseDown = true;
+            run(cmd);
+        }, true);
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (firedByMouseDown) { firedByMouseDown = false; return; }
+            run(cmd);
+        });
+
+        return btn;
+    }
+
+    function render() {
+        if (!isTop || !snPageGate.allowed()) { hide(); return; }
+        const pinned = pinnedList();
+        if (!pinned.length) { hide(); return; }
+        if (!mountPoint()) return;
+
+        build();
+        dock.style.display = 'flex';
+
+        // Commands update whenever one runs (the usage counter is stored in the
+        // same array). Rebuilding rows for that would throw away the very button
+        // under the pointer, so only touch the DOM when something visible moved.
+        const key = pinned.map(function(c) {
+            return [c.id, c.name, c.hint || '', c.script || '',
+                    c.order == null ? '' : c.order].join('\u0001');
+        }).join('\u0002');
+        if (key !== rowsKey) {
+            rowsKey = key;
+            listEl.innerHTML = '';
+            pinned.forEach(function(cmd) { listEl.appendChild(makeRow(cmd)); });
+        }
+
+        if (!pos) pos = defaultPos();
+        pos = clampPos(pos);
+        applyPos();
+    }
+
+    function hide() {
+        if (dock) dock.style.display = 'none';
+    }
+
+    function defaultPos() {
+        const w = dock ? dock.offsetWidth : 200;
+        const h = dock ? dock.offsetHeight : 220;
+        return { left: EDGE, top: Math.max(EDGE, Math.round((window.innerHeight - h) / 2)) };
+    }
+
+    function clampPos(p) {
+        const w = dock ? dock.offsetWidth : 200;
+        const h = dock ? dock.offsetHeight : 220;
+        const maxLeft = Math.max(EDGE, window.innerWidth - w - EDGE);
+        const maxTop  = Math.max(EDGE, window.innerHeight - h - EDGE);
+        return {
+            left: Math.min(Math.max(Number(p.left), EDGE), maxLeft),
+            top:  Math.min(Math.max(Number(p.top), EDGE), maxTop)
+        };
+    }
+
+    function applyPos() {
+        if (!dock || !pos) return;
+        dock.style.left = pos.left + 'px';
+        dock.style.top  = pos.top + 'px';
+    }
+
+    function validPos(p) {
+        return p && typeof p.left === 'number' && typeof p.top === 'number' &&
+               isFinite(p.left) && isFinite(p.top);
+    }
+
+    function persistPos() {
+        saveTimer = null;
+        if (!pos) return;
+        const payload = {};
+        payload[POS_STORE] = { left: Math.round(pos.left), top: Math.round(pos.top) };
+        try { chrome.storage.local.set(payload); } catch (e) { /* context invalidated */ }
+    }
+
+    function savePos(delay) {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(persistPos, delay || 0);
+    }
+
+    function onDragStart(e) {
+        if (e.button !== 0 || !dock) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const rect = dock.getBoundingClientRect();
+        drag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: rect.left, top: rect.top };
+        pos = { left: rect.left, top: rect.top };
+        dock.classList.add('sn-pin-dragging');
+        try { head.setPointerCapture(e.pointerId); } catch (err) { /* older browser */ }
+    }
+
+    function onDragMove(e) {
+        if (!drag || e.pointerId !== drag.id) return;
+        e.preventDefault();
+        pos = clampPos({
+            left: drag.left + (e.clientX - drag.x),
+            top:  drag.top  + (e.clientY - drag.y)
+        });
+        applyPos();
+    }
+
+    function onDragEnd(e) {
+        if (!drag || (e.pointerId !== undefined && e.pointerId !== drag.id)) return;
+        drag = null;
+        if (dock) dock.classList.remove('sn-pin-dragging');
+        try { head.releasePointerCapture(e.pointerId); } catch (err) { /* already released */ }
+        savePos(0);
+    }
+
+    function onHeadKey(e) {
+        const step = e.shiftKey ? 40 : 12;
+        let dx = 0, dy = 0;
+        if (e.key === 'ArrowLeft')       dx = -step;
+        else if (e.key === 'ArrowRight') dx =  step;
+        else if (e.key === 'ArrowUp')    dy = -step;
+        else if (e.key === 'ArrowDown')  dy =  step;
+        else return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        if (!dock) return;
+        if (!pos) {
+            const rect = dock.getBoundingClientRect();
+            pos = { left: rect.left, top: rect.top };
+        }
+        pos = clampPos({ left: pos.left + dx, top: pos.top + dy });
+        applyPos();
+        savePos(250);
+    }
+
+    function onResize() {
+        if (!pos || !dock) return;
+        pos = clampPos(pos);
+        applyPos();
+    }
+
+    function applyTheme() {
+        if (styleEl) styleEl.textContent = dockCss(PIN_THEMES[theme]);
+    }
+
+    function run(cmd) {
+        try {
+            const p = chrome.runtime.sendMessage({
+                source: 'SN_COMMANDS_EXEC',
+                script: cmd.script,
+                name:   cmd.name,
+                id:     cmd.id
+            });
+            if (p && typeof p.catch === 'function') {
+                p.catch(function(e) { console.error('[SN Commands] Pinned command failed:', cmd.name, e); });
+            }
+        } catch (e) {
+            console.error('[SN Commands] Pinned command failed:', cmd.name, e);
+        }
+    }
+
+    if (isTop) {
+        try {
+            chrome.storage.local.get(['snCommands', 'snTheme', POS_STORE], function(res) {
+                commands = Array.isArray(res && res.snCommands) ? res.snCommands : [];
+                theme    = res && res.snTheme === 'light' ? 'light' : 'dark';
+                pos      = validPos(res && res[POS_STORE])
+                    ? { left: res[POS_STORE].left, top: res[POS_STORE].top }
+                    : null;
+                render();
+            });
+
+            chrome.storage.onChanged.addListener(function(changes, area) {
+                if (area !== 'local') return;
+                if (changes.snCommands) {
+                    commands = Array.isArray(changes.snCommands.newValue) ? changes.snCommands.newValue : [];
+                    render();
+                }
+                if (changes.snTheme) {
+                    theme = changes.snTheme.newValue === 'light' ? 'light' : 'dark';
+                    applyTheme();
+                }
+                if (changes[POS_STORE] && !drag) {
+                    const next = changes[POS_STORE].newValue;
+                    if (validPos(next)) {
+                        pos = clampPos({ left: next.left, top: next.top });
+                        applyPos();
+                    } else if (next == null) {
+                        pos = null;
+                        render();
+                    }
+                }
+            });
+
+            // Polaris can finish booting after document_idle; the dock appears
+            // the moment the gate accepts the page, with no reload.
+            snPageGate.onChange(function() {
+                try { render(); }
+                catch (e) { console.error('[SN Commands] pinned dock re-check failed:', e); }
+            });
+        } catch (e) {
+            console.error('[SN Commands] pinned dock unavailable:', e);
+        }
+    }
+
+})();

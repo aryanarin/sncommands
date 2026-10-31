@@ -228,7 +228,7 @@ function renderList() {
 
   filtered.forEach(cmd => {
     const item = document.createElement('div');
-    item.className = 'cmd-item' + (cmd.id === activeId ? ' active' : '');
+    item.className = 'cmd-item' + (cmd.id === activeId ? ' active' : '') + (cmd.pinned ? ' pinned' : '');
     item.dataset.id = cmd.id;
 
     // Checkbox
@@ -260,8 +260,23 @@ function renderList() {
     body.appendChild(hintEl);
     body.addEventListener('click', () => selectCommand(cmd.id));
 
+    // Pin
+    const pinBtn = document.createElement('button');
+    pinBtn.type = 'button';
+    pinBtn.className = 'cmd-pin';
+    pinBtn.textContent = cmd.pinned ? '★' : '☆';
+    pinBtn.title = cmd.pinned ? 'Unpin from ServiceNow page' : 'Pin to ServiceNow page';
+    pinBtn.setAttribute('aria-pressed', cmd.pinned ? 'true' : 'false');
+    pinBtn.setAttribute('aria-label', (cmd.pinned ? 'Unpin ' : 'Pin ') + '\\' + cmd.name);
+    pinBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      cmd.pinned = !cmd.pinned;
+      save(() => renderList());
+    });
+
     item.appendChild(checkWrap);
     item.appendChild(body);
+    item.appendChild(pinBtn);
     cmdList.appendChild(item);
   });
 
@@ -587,7 +602,8 @@ function buildEditor(cmd) {
       script: getScript(),
       order: orderInput.value.trim() !== '' ? parseInt(orderInput.value, 10) : null,
       createdAt: Date.now(),
-      uses: 0
+      uses: 0,
+      pinned: false
     };
     commands.push(newCmd);
     activeId = newCmd.id;
@@ -620,7 +636,7 @@ function buildEditor(cmd) {
       if (idx !== -1) commands[idx] = { ...commands[idx], name, hint, script, order, updatedAt: Date.now() };
     } else {
       const newId = Date.now() + '';
-      commands.push({ id: newId, name, hint, script, order, createdAt: Date.now(), uses: 0 });
+      commands.push({ id: newId, name, hint, script, order, createdAt: Date.now(), uses: 0, pinned: false });
       activeId = newId;
     }
     save(() => {
@@ -839,8 +855,9 @@ importFile.addEventListener('change', e => {
           if (existingIdx !== -1) {
             // Same name already exists — the imported command replaces it
             // (keep the original id/createdAt, refresh the rest + updatedAt).
-            // Keep the local id, creation date and usage history — an import
-            // updates the script, it doesn't reset how often you've run it.
+            // Keep the local id, creation date, usage history and pin state —
+            // an import updates the script, it doesn't reset how often you've
+            // run it or whether it's on your ServiceNow dock.
             commands[existingIdx] = {
               ...commands[existingIdx],
               ...c,
@@ -848,11 +865,12 @@ importFile.addEventListener('change', e => {
               createdAt: commands[existingIdx].createdAt,
               uses: commands[existingIdx].uses || 0,
               lastUsedAt: commands[existingIdx].lastUsedAt,
+              pinned: commands[existingIdx].pinned === true,
               updatedAt: Date.now()
             };
             replaced++;
           } else {
-            commands.push({ ...c, id: Date.now() + '' + Math.random(), createdAt: Date.now(), uses: c.uses || 0 });
+            commands.push({ ...c, id: Date.now() + '' + Math.random(), createdAt: Date.now(), uses: c.uses || 0, pinned: c.pinned === true });
             added++;
           }
         });
@@ -865,7 +883,7 @@ importFile.addEventListener('change', e => {
         });
       } else {
         commands = valid.map(c => ({
-          ...c, id: Date.now() + '' + Math.random(), createdAt: Date.now(), uses: c.uses || 0
+          ...c, id: Date.now() + '' + Math.random(), createdAt: Date.now(), uses: c.uses || 0, pinned: c.pinned === true
         }));
         save(() => { showToast('⬆ Replaced with ' + commands.length + ' commands'); renderList(); });
       }

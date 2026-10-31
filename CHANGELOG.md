@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented here.
 
+## [4.8.4]
+### Added
+- **Pinned command dock on ServiceNow pages.** Every command row in the popup
+  and settings page now has a star button. Pinned commands appear in a compact
+  dock at the left edge of the page, vertically centred, so the commands you use
+  most are one click away without opening the palette. Drag the dock by its
+  **⠿ PINNED** header to reposition it, or focus the header and use the arrow
+  keys (`Shift` for larger steps). The position is stored locally under
+  `snPinnedPos` and restored across reloads, tabs and browser restarts.
+- The dock follows the extension's light/dark theme, updates live when commands
+  are pinned, unpinned or edited, hides itself when nothing is pinned, and is
+  only built on pages recognised as ServiceNow instances. It works in both
+  Next Experience / workspace and the classic UI frameset.
+- Import/export carries the new `pinned` flag. A merge by name keeps your local
+  pin state, alongside the local id, creation date and usage history.
+
+### Notes
+- Pins and position never leave `chrome.storage.local`; nothing is transmitted.
+- The audit suite now covers the dock in both themes and both browsers,
+  including default placement, dragging, keyboard movement, position
+  persistence, live pin/unpin updates, classic-UI frameset pages and the
+  non-ServiceNow page gate.
+- The Firefox build now declares the add-on ID AMO assigned to the existing
+  listing at first submission, so a store update installs over that listing
+  instead of failing with an ID-mismatch error.
+
 ## [4.8.3]
 ### Fixed
 - **Keep-alive could report success without actually keeping the session

@@ -673,6 +673,21 @@ BUILDS.forEach(build => {
   }
   check(/paletteCss/.test(content) && /::placeholder/.test(content) && /caret-color/.test(content),
         `${build}: palette styles its placeholder and caret`);
+
+  // The pinned dock builds its own theme map. It must stay in lockstep with the
+  // palette, or a colour fixed in one place silently regresses in the other.
+  const dockBody = objectBody(content, 'const PIN_THEMES =');
+  check(!!dockBody, `${build}: content.js dock themes are readable`);
+  if (palettesBody && dockBody) {
+    ['dark', 'light'].forEach(theme => {
+      const palette = objectProps(objectBody(palettesBody, theme + ':'));
+      const dock    = objectProps(objectBody(dockBody, theme + ':'));
+      Object.keys(palette).forEach(name => {
+        check(dock[name] === palette[name],
+              `${build}: dock ${theme}.${name} matches the palette`, dock[name] + ' vs ' + palette[name]);
+      });
+    });
+  }
 });
 
 // ── Report ────────────────────────────────────────────────────────────────────
